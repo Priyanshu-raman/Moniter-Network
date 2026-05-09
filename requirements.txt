@@ -4,3 +4,7 @@ flask-cors>=4.0
 scapy>=2.5
 python-nmap>=0.7
 mac-vendor-lookup>=0.1.11
+gunicorn>=21.2
+whitenoise>=6.6
+python-dotenv>=1.0
+django-browser-reload>=1.12

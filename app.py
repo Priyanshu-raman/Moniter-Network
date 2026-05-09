@@ -8,10 +8,18 @@ from datetime import datetime, timedelta
 import concurrent.futures
 import threading
 import json
-# import sqlite3from mac_vendor_lookup import MacLookup
 import sqlite3
-from mac_vendor_lookup import MacLookup
 import socket
+import os
+
+# Load .env in development
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+from mac_vendor_lookup import MacLookup
 
 app = Flask(__name__)
 CORS(app)  # Allow cross-origin requests from Django frontend

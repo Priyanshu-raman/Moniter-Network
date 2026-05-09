@@ -8,3 +8,4 @@ gunicorn>=21.2
 whitenoise>=6.6
 python-dotenv>=1.0
 django-browser-reload>=1.12
+Pillow>=10.0

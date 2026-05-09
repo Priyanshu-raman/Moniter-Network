@@ -1,0 +1,427 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Profile — Monitor OS</title>
+    <meta name="description" content="Update your username, email, bio, profile picture, or change your password.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .edit-profile-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .edit-profile-page::before {
+            content: '';
+            position: absolute;
+            width: 600px; height: 600px; border-radius: 50%;
+            background: var(--accent-green);
+            filter: blur(120px); opacity: 0.1;
+            top: -200px; left: -150px;
+            pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px;
+            height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap;
+            text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(51,153,51,0.3); }
+        .sidebar-btn.active { background: rgba(51,153,51,0.12); border-color: var(--accent-green); color: var(--accent-green); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-green); color: var(--accent-green); }
+
+        /* ── Main ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 4rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; max-width: 900px;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-green); }
+
+        /* ── Alert banners ── */
+        .alert-banner {
+            padding: 1rem 1.5rem; border-radius: 14px; font-size: 0.9rem;
+            font-weight: 600; display: flex; align-items: center; gap: 10px;
+        }
+        .alert-success { background: rgba(51,153,51,0.15); border: 1px solid var(--accent-green); color: var(--accent-green); }
+        .alert-error { background: rgba(239,68,68,0.12); border: 1px solid var(--accent-red); color: var(--accent-red); }
+
+        /* ── Section cards ── */
+        .settings-section {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px; padding: 2rem 2.5rem;
+            box-shadow: var(--glass-shadow);
+        }
+        .section-title {
+            font-size: 0.85rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--accent-green);
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem; margin-bottom: 2rem;
+            display: flex; align-items: center; gap: 10px;
+        }
+
+        /* ── Avatar ── */
+        .avatar-row { display: flex; align-items: center; gap: 2rem; margin-bottom: 2rem; }
+        .avatar-preview {
+            width: 90px; height: 90px; border-radius: 20px;
+            border: 2px solid var(--accent-green);
+            overflow: hidden; flex-shrink: 0;
+            background: rgba(0,0,0,0.2);
+            box-shadow: 0 0 25px rgba(51,153,51,0.2);
+        }
+        .avatar-preview img { width: 100%; height: 100%; object-fit: cover; }
+        .avatar-upload-btn {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(51,153,51,0.1); border: 1px solid rgba(51,153,51,0.4);
+            color: var(--accent-green); padding: 0.6rem 1.2rem;
+            border-radius: 10px; cursor: pointer;
+            font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease;
+        }
+        .avatar-upload-btn:hover { background: rgba(51,153,51,0.2); border-color: var(--accent-green); }
+
+        /* ── Form fields ── */
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; gap: 0.6rem; }
+        .form-group.full { grid-column: span 2; }
+        .form-label { font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+        .form-input, .form-textarea {
+            background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 0.8rem 1.1rem;
+            color: var(--text-main); font-size: 0.9rem;
+            transition: all 0.15s ease; font-family: inherit; width: 100%;
+        }
+        .form-textarea { min-height: 90px; resize: vertical; }
+        .form-input:focus, .form-textarea:focus {
+            outline: none; border-color: var(--accent-green);
+            background: rgba(51,153,51,0.05);
+            box-shadow: 0 0 20px rgba(51,153,51,0.1);
+        }
+
+        /* ── Password grid ── */
+        .pw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+        .pw-grid .form-group:last-child { grid-column: span 2; }
+
+        /* ── Buttons ── */
+        .btn-submit {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: var(--accent-green); color: #000;
+            border: none; border-radius: 12px;
+            padding: 0.8rem 1.8rem; font-size: 0.9rem; font-weight: 700;
+            cursor: pointer; transition: all 0.15s ease; margin-top: 1.5rem;
+        }
+        .btn-submit:hover { opacity: 0.85; transform: translateY(-1px); box-shadow: 0 6px 25px rgba(51,153,51,0.35); }
+        .btn-back {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+            color: var(--text-muted); border-radius: 12px;
+            padding: 0.8rem 1.4rem; font-size: 0.9rem; font-weight: 600;
+            cursor: pointer; transition: all 0.15s ease;
+            margin-top: 1.5rem; text-decoration: none;
+        }
+        .btn-back:hover { background: rgba(255,255,255,0.08); border-color: var(--text-muted); color: var(--text-main); }
+        .btn-danger {
+            background: rgba(239,68,68,0.12); color: var(--accent-red);
+            border: 1px solid rgba(239,68,68,0.4);
+            border-radius: 12px; padding: 0.8rem 1.8rem;
+            font-size: 0.9rem; font-weight: 700; cursor: pointer;
+            transition: all 0.15s ease; margin-top: 1.5rem;
+            display: inline-flex; align-items: center; gap: 8px;
+        }
+        .btn-danger:hover { background: rgba(239,68,68,0.22); }
+
+        @media (max-width: 700px) {
+            .form-grid, .pw-grid { grid-template-columns: 1fr; }
+            .form-group.full { grid-column: span 1; }
+        }
+    </style>
+</head>
+
+<body class="edit-profile-page">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'edit_profile' %}">
+            <i data-lucide="user-cog" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Edit Profile</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Content -->
+    <div class="main-wrapper">
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <a href="{% url 'account' %}" class="btn-back" style="margin-top:0;padding:0.5rem 1rem;font-size:0.82rem;">
+                <i data-lucide="arrow-left" style="width:14px;height:14px;"></i>
+                Back to Account
+            </a>
+        </div>
+
+        <div class="page-title">
+            <i data-lucide="user-cog" style="width:28px;height:28px;"></i>
+            Edit Profile
+        </div>
+
+        {% if success %}
+        <div class="alert-banner alert-success" id="success-banner">
+            <i data-lucide="check-circle" style="width:18px;height:18px;flex-shrink:0;"></i>
+            {{ success }}
+        </div>
+        {% endif %}
+
+        {% if error %}
+        <div class="alert-banner alert-error">
+            <i data-lucide="alert-circle" style="width:18px;height:18px;flex-shrink:0;"></i>
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <!-- ── Profile Information ── -->
+        <div class="settings-section">
+            <div class="section-title">
+                <i data-lucide="user-cog" style="width:16px;height:16px;"></i>
+                Profile Information
+            </div>
+
+            <form method="post" enctype="multipart/form-data" id="profile-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="profile">
+
+                <!-- Avatar -->
+                <div class="avatar-row">
+                    <div class="avatar-preview">
+                        <img id="avatar-img" src="{{ avatar_url }}" alt="Avatar">
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:0.6rem;">
+                        <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                            <label class="avatar-upload-btn" for="avatar-input">
+                                <i data-lucide="upload" style="width:15px;height:15px;"></i>
+                                Upload Photo
+                            </label>
+                            <input type="hidden" id="clear-avatar-flag" name="clear_avatar" value="">
+                            <button type="button" id="delete-avatar-btn"
+                                onclick="confirmDeleteAvatar()"
+                                style="display:{% if profile.avatar %}inline-flex{% else %}none{% endif %};
+                                       align-items:center;gap:6px;
+                                       background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);
+                                       color:var(--accent-red);padding:0.6rem 1.1rem;border-radius:10px;
+                                       cursor:pointer;font-size:0.85rem;font-weight:600;transition:all 0.15s ease;"
+                                onmouseover="this.style.background='rgba(239,68,68,0.2)'"
+                                onmouseout="this.style.background='rgba(239,68,68,0.1)'">
+                                <i data-lucide="trash-2" style="width:15px;height:15px;"></i>
+                                Delete Photo
+                            </button>
+                        </div>
+                        <div style="font-size:0.75rem;color:var(--text-muted);">JPG, PNG or WebP · max 2 MB</div>
+                    </div>
+                </div>
+                <input type="file" id="avatar-input" name="avatar" accept="image/*" style="display:none;" onchange="previewAvatar(this)">
+
+                <!-- Fields -->
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="id_username">Username</label>
+                        <input class="form-input" id="id_username" name="username" type="text" value="{{ username }}" autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="id_email">Email Address</label>
+                        <input class="form-input" id="id_email" name="email" type="email" value="{{ profile.email }}" placeholder="you@example.com">
+                    </div>
+                    <div class="form-group full">
+                        <label class="form-label" for="id_bio">Bio / Notes</label>
+                        <textarea class="form-textarea" id="id_bio" name="bio" placeholder="Something about yourself…">{{ profile.bio }}</textarea>
+                    </div>
+                </div>
+
+                <button class="btn-submit" type="submit" id="save-profile-btn">
+                    <i data-lucide="save" style="width:16px;height:16px;"></i>
+                    Save Profile
+                </button>
+            </form>
+        </div>
+
+        <!-- ── Change Password ── -->
+        <div class="settings-section">
+            <div class="section-title">
+                <i data-lucide="lock" style="width:16px;height:16px;"></i>
+                Change Password
+            </div>
+
+            <form method="post" id="password-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="password">
+
+                <div class="pw-grid">
+                    <div class="form-group">
+                        <label class="form-label" for="id_old_password">Current Password</label>
+                        <input class="form-input" id="id_old_password" name="old_password" type="password" autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="id_new_password1">New Password</label>
+                        <input class="form-input" id="id_new_password1" name="new_password1" type="password" autocomplete="new-password">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="id_new_password2">Confirm New Password</label>
+                        <input class="form-input" id="id_new_password2" name="new_password2" type="password" autocomplete="new-password">
+                    </div>
+                </div>
+
+                {% if pw_form.errors %}
+                <ul style="color:var(--accent-red);font-size:0.82rem;margin-top:0.5rem;padding-left:1rem;">
+                    {% for field in pw_form %}{% for err in field.errors %}<li>{{ err }}</li>{% endfor %}{% endfor %}
+                    {% for err in pw_form.non_field_errors %}<li>{{ err }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+
+                <button class="btn-submit" type="submit">
+                    <i data-lucide="shield-check" style="width:16px;height:16px;"></i>
+                    Update Password
+                </button>
+            </form>
+        </div>
+
+        <!-- ── Danger Zone ── -->
+        <div class="settings-section" style="border-color:rgba(239,68,68,0.25);">
+            <div class="section-title" style="color:var(--accent-red);border-color:rgba(239,68,68,0.2);">
+                <i data-lucide="alert-triangle" style="width:16px;height:16px;"></i>
+                Danger Zone
+            </div>
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:0;">
+                Logging out will end your session and record a logout event in the security audit trail.
+            </p>
+            <a href="{% url 'logout' %}">
+                <button class="btn-danger">
+                    <i data-lucide="log-out" style="width:16px;height:16px;"></i>
+                    Logout Now
+                </button>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        function previewAvatar(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    document.getElementById('avatar-img').src = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+                document.getElementById('clear-avatar-flag').value = '';
+                document.getElementById('delete-avatar-btn').style.display = 'inline-flex';
+            }
+        }
+
+        function confirmDeleteAvatar() {
+            if (!confirm('Remove your profile photo? The dicebear avatar will be used instead.')) return;
+            document.getElementById('clear-avatar-flag').value = '1';
+            const fileInput = document.getElementById('avatar-input');
+            fileInput.value = '';
+            const username = '{{ username|escapejs }}';
+            document.getElementById('avatar-img').src =
+                `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
+            document.getElementById('delete-avatar-btn').style.display = 'none';
+        }
+
+        // Auto-dimiss success banner after 4 seconds
+        const banner = document.getElementById('success-banner');
+        if (banner) {
+            setTimeout(() => {
+                banner.style.transition = 'opacity 0.5s ease';
+                banner.style.opacity = '0';
+                setTimeout(() => banner.remove(), 500);
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

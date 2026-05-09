@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Node.js Brand Colors */
+    --bg-deep: #0b0f15;
+    --bg-dark: #11151c;
+    --accent-green: #339933;
+    --accent-green-light: #68A063;
+
+    /* Status Colors */
+    --accent-blue: #4a90e2;
+    --accent-red: #d34a4a;
+    --accent-orange: #f5a623;
+
+    /* True Glass Variables */
+    --glass-bg: rgba(17, 25, 35, 0.35);
+    --glass-bg-hover: rgba(51, 153, 51, 0.15);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-highlight: rgba(255, 255, 255, 0.15);
+    --glass-blur: blur(16px);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+
+    /* Text */
+    --text-main: #f0f6f0;
+    --text-muted: #8b949e;
+
+    /* Layout Setup */
+    --sidebar-width: 260px;
+    --header-height: 80px;
+    --transition: all 0.2s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Inter', sans-serif;
+}
+
+body {
+    background: var(--bg-deep);
+    color: var(--text-main);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+}
+
+#root {
+    width: 100%;
+}
+
+/* Base Glass Utility Class */
+.glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    border-top: 1px solid var(--glass-border-highlight);
+    border-left: 1px solid var(--glass-border-highlight);
+    box-shadow: var(--glass-shadow);
+    border-radius: 20px;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}

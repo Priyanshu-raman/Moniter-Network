@@ -1,0 +1,709 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings — Monitor OS</title>
+    <meta name="description" content="Admin configuration: IT contact directory, default scan range, and scan interval.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .settings-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .settings-page::before {
+            content: ''; position: absolute;
+            width: 700px; height: 700px; border-radius: 50%;
+            background: var(--accent-green); filter: blur(140px); opacity: 0.07;
+            top: -200px; right: -200px; pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(51,153,51,0.3); }
+        .sidebar-btn.active { background: rgba(51,153,51,0.12); border-color: var(--accent-green); color: var(--accent-green); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-green); color: var(--accent-green); }
+
+        /* ── Main layout ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 5rem;
+            display: flex; flex-direction: column; gap: 2.5rem;
+            position: relative; z-index: 1; max-width: 1000px;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-green); }
+
+        /* ── Toast / Messages ── */
+        .toast {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 1rem 1.5rem; border-radius: 14px;
+            font-size: 0.9rem; font-weight: 600; animation: fadeIn 0.3s ease;
+        }
+        .toast-success {
+            background: rgba(51,153,51,0.12); border: 1px solid rgba(51,153,51,0.4);
+            color: var(--accent-green);
+        }
+        .toast-error {
+            background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.35);
+            color: var(--accent-red);
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* ── Section cards ── */
+        .settings-section {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); border-radius: 24px;
+            box-shadow: var(--glass-shadow); overflow: hidden;
+        }
+        .section-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1.75rem 2rem; border-bottom: 1px solid var(--glass-border);
+            flex-wrap: wrap; gap: 1rem;
+        }
+        .section-label {
+            font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--accent-green);
+            display: flex; align-items: center; gap: 0.6rem;
+        }
+        .section-body { padding: 2rem; }
+
+        /* ── Admin-only badge ── */
+        .admin-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0.3rem 0.8rem; border-radius: 50px;
+            font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;
+            background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.35);
+            color: var(--accent-orange);
+        }
+        .readonly-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0.3rem 0.8rem; border-radius: 50px;
+            font-size: 0.72rem; font-weight: 700;
+            background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+            color: var(--text-muted);
+        }
+
+        /* ── Forms ── */
+        .form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-label {
+            font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.8px; color: var(--text-muted);
+        }
+        .settings-input, .settings-select {
+            width: 100%; background: rgba(0,0,0,0.25);
+            border: 1px solid var(--glass-border); border-radius: 10px;
+            padding: 0.75rem 1rem; color: var(--text-main);
+            font-size: 0.9rem; font-family: 'Inter', sans-serif;
+            transition: all 0.15s ease; outline: none;
+            -webkit-appearance: none; appearance: none;
+        }
+        .settings-input:focus, .settings-select:focus {
+            border-color: var(--accent-green);
+            background: rgba(51,153,51,0.05);
+            box-shadow: 0 0 0 3px rgba(51,153,51,0.12);
+        }
+        .settings-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center;
+            padding-right: 2.5rem; cursor: pointer;
+        }
+        .settings-select option { background: #11151c; color: var(--text-main); }
+        .form-error { font-size: 0.78rem; color: var(--accent-red); margin-top: 0.25rem; }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.7rem 1.4rem; border-radius: 10px;
+            background: rgba(51,153,51,0.12); border: 1px solid rgba(51,153,51,0.4);
+            color: var(--accent-green); font-weight: 600; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-primary:hover { background: rgba(51,153,51,0.22); border-color: var(--accent-green); }
+        .btn-danger {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.45rem 0.9rem; border-radius: 8px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+            color: var(--accent-red); font-weight: 600; font-size: 0.8rem;
+            cursor: pointer; transition: all 0.15s ease; font-family: 'Inter', sans-serif;
+        }
+        .btn-danger:hover { background: rgba(239,68,68,0.18); }
+        .btn-ghost {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.45rem 0.9rem; border-radius: 8px;
+            background: transparent; border: 1px solid var(--glass-border);
+            color: var(--text-muted); font-weight: 600; font-size: 0.8rem;
+            cursor: pointer; transition: all 0.15s ease;
+            text-decoration: none; font-family: 'Inter', sans-serif;
+        }
+        .btn-ghost:hover { border-color: var(--accent-green); color: var(--accent-green); }
+
+        /* ── Contact table ── */
+        .contact-table { width: 100%; border-collapse: collapse; }
+        .contact-table th {
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--text-muted); padding: 0.6rem 1rem;
+            text-align: left; border-bottom: 1px solid var(--glass-border);
+        }
+        .contact-table td {
+            padding: 1rem 1rem; font-size: 0.88rem; color: var(--text-main);
+            border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle;
+        }
+        .contact-table tr:last-child td { border-bottom: none; }
+        .contact-table tr:hover td { background: rgba(51,153,51,0.03); }
+        .role-pill {
+            display: inline-block; padding: 0.28rem 0.75rem;
+            border-radius: 50px; font-size: 0.72rem; font-weight: 700;
+            background: rgba(51,153,51,0.1); border: 1px solid rgba(51,153,51,0.3);
+            color: var(--accent-green);
+        }
+        .empty-state {
+            text-align: center; padding: 3.5rem 1rem;
+            color: var(--text-muted); font-size: 0.9rem;
+            display: flex; flex-direction: column; align-items: center; gap: 0.75rem;
+        }
+        .empty-state i { color: rgba(51,153,51,0.3); }
+
+        /* ── Modal overlay ── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(6px); z-index: 9000;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-box {
+            background: #111923; border: 1px solid var(--glass-border);
+            border-radius: 24px; padding: 2.5rem; width: 100%; max-width: 540px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+            transform: translateY(20px); transition: transform 0.2s ease;
+        }
+        .modal-overlay.active .modal-box { transform: translateY(0); }
+        .modal-title {
+            font-size: 1.15rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem;
+        }
+        .modal-title i { color: var(--accent-green); }
+
+        /* ── Info row (readonly display) ── */
+        .info-row {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { font-size: 0.82rem; color: var(--text-muted); }
+        .info-value {
+            font-size: 0.95rem; font-weight: 700; color: var(--text-main);
+            font-family: 'Courier New', monospace;
+        }
+        .info-value-green { color: var(--accent-green); }
+
+        /* ── Divider ── */
+        .form-divider { border: none; border-top: 1px solid var(--glass-border); margin: 1.75rem 0; }
+
+        @media (max-width: 680px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .main-wrapper { padding: 1.5rem 1rem 4rem; }
+            .section-body { padding: 1.25rem; }
+        }
+    </style>
+</head>
+
+<body class="settings-page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}" id="nav-dashboard">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" id="nav-account">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}" id="nav-map">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}" id="nav-logs">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'settings' %}" id="nav-settings">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <!-- Page title -->
+        <div class="page-title">
+            <i data-lucide="settings-2" style="width:28px;height:28px;"></i>
+            Settings
+            {% if is_admin %}
+                <span class="admin-badge"><i data-lucide="shield-check" style="width:11px;height:11px;"></i> Admin</span>
+            {% else %}
+                <span class="readonly-badge"><i data-lucide="eye" style="width:11px;height:11px;"></i> Read-Only</span>
+            {% endif %}
+        </div>
+
+        <!-- Flash Messages -->
+        {% if success_msg %}
+        <div class="toast toast-success" id="flash-msg">
+            <i data-lucide="check-circle-2" style="width:18px;height:18px;flex-shrink:0;"></i>
+            {{ success_msg }}
+        </div>
+        {% endif %}
+        {% if error_msg %}
+        <div class="toast toast-error" id="flash-msg">
+            <i data-lucide="alert-circle" style="width:18px;height:18px;flex-shrink:0;"></i>
+            {{ error_msg }}
+        </div>
+        {% endif %}
+
+        <!-- ════════════════════════════════════════════════════════════
+             SECTION 1: IT & Security Contact Directory
+        ════════════════════════════════════════════════════════════ -->
+        <div class="settings-section">
+            <div class="section-header">
+                <div class="section-label">
+                    <i data-lucide="book-user" style="width:16px;height:16px;"></i>
+                    IT &amp; Security Contact Directory
+                </div>
+                {% if is_admin %}
+                <button class="btn-primary" id="add-contact-btn" onclick="openAddModal()">
+                    <i data-lucide="user-plus" style="width:15px;height:15px;"></i>
+                    Add New Contact
+                </button>
+                {% endif %}
+            </div>
+
+            <div class="section-body" style="padding: 0 2rem 2rem;">
+                {% if contacts %}
+                <table class="contact-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            {% if is_admin %}<th style="text-align:right;">Actions</th>{% endif %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for contact in contacts %}
+                        <tr>
+                            <td>
+                                <div style="display:flex;align-items:center;gap:0.7rem;">
+                                    <div style="width:34px;height:34px;border-radius:10px;background:rgba(51,153,51,0.1);border:1px solid rgba(51,153,51,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                                        <i data-lucide="user" style="width:15px;height:15px;color:var(--accent-green);"></i>
+                                    </div>
+                                    <strong>{{ contact.name }}</strong>
+                                </div>
+                            </td>
+                            <td><span class="role-pill">{{ contact.get_role_display }}</span></td>
+                            <td>
+                                <a href="mailto:{{ contact.email }}" style="color:var(--accent-blue);text-decoration:none;">
+                                    {{ contact.email }}
+                                </a>
+                            </td>
+                            <td style="color:var(--text-muted);">
+                                {{ contact.contact_number|default:"—" }}
+                            </td>
+                            {% if is_admin %}
+                            <td style="text-align:right;">
+                                <div style="display:flex;gap:0.5rem;justify-content:flex-end;">
+                                    <button class="btn-ghost"
+                                        onclick="openEditModal({{ contact.pk }}, '{{ contact.name|escapejs }}', '{{ contact.role }}', '{{ contact.email|escapejs }}', '{{ contact.contact_number|escapejs }}')"
+                                        title="Edit">
+                                        <i data-lucide="pencil" style="width:13px;height:13px;"></i> Edit
+                                    </button>
+                                    <button class="btn-danger"
+                                        onclick="openDeleteModal({{ contact.pk }}, '{{ contact.name|escapejs }}')"
+                                        title="Delete">
+                                        <i data-lucide="trash-2" style="width:13px;height:13px;"></i> Delete
+                                    </button>
+                                </div>
+                            </td>
+                            {% endif %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="empty-state">
+                    <i data-lucide="users" style="width:42px;height:42px;"></i>
+                    <span>No contacts yet.</span>
+                    {% if is_admin %}
+                    <button class="btn-primary" onclick="openAddModal()">
+                        <i data-lucide="user-plus" style="width:14px;height:14px;"></i> Add First Contact
+                    </button>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════
+             SECTION 2 & 3: Default Scan IP Range + Scan Interval
+        ════════════════════════════════════════════════════════════ -->
+        <div class="settings-section">
+            <div class="section-header">
+                <div class="section-label">
+                    <i data-lucide="sliders-horizontal" style="width:16px;height:16px;"></i>
+                    Scan Configuration
+                </div>
+                {% if is_admin %}
+                    <span class="admin-badge"><i data-lucide="lock-open" style="width:11px;height:11px;"></i> Editable</span>
+                {% else %}
+                    <span class="readonly-badge"><i data-lucide="lock" style="width:11px;height:11px;"></i> Admin Only</span>
+                {% endif %}
+            </div>
+
+            <div class="section-body">
+                {% if is_admin %}
+                <!-- Admin: show the editable form -->
+                <form method="POST" action="{% url 'settings' %}" id="global-settings-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_global">
+
+                    <!-- IP Range -->
+                    <div style="margin-bottom:2rem;">
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1.2rem;">
+                            <i data-lucide="wifi" style="width:16px;height:16px;color:var(--accent-green);"></i>
+                            <span style="font-weight:700;font-size:0.95rem;">Default Scan IP Range</span>
+                        </div>
+                        <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.6;">
+                            This CIDR subnet is pre-filled in the dashboard scan bar when a user opens the app.
+                        </p>
+                        <div class="form-group">
+                            <label class="form-label" for="id_default_ip_range">
+                                <i data-lucide="network" style="width:11px;height:11px;"></i> CIDR Subnet
+                            </label>
+                            {{ gs_form.default_ip_range }}
+                            {% for err in gs_form.default_ip_range.errors %}
+                                <span class="form-error">{{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <hr class="form-divider">
+
+                    <!-- Scan Interval -->
+                    <div>
+                        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1.2rem;">
+                            <i data-lucide="clock" style="width:16px;height:16px;color:var(--accent-green);"></i>
+                            <span style="font-weight:700;font-size:0.95rem;">Scan Interval</span>
+                        </div>
+                        <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:1rem;line-height:1.6;">
+                            How often the dashboard triggers an automatic re-scan of the network.
+                        </p>
+                        <div class="form-group" style="max-width:300px;">
+                            <label class="form-label" for="id_scan_interval">
+                                <i data-lucide="timer" style="width:11px;height:11px;"></i> Interval
+                            </label>
+                            {{ gs_form.scan_interval }}
+                            {% for err in gs_form.scan_interval.errors %}
+                                <span class="form-error">{{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--glass-border);">
+                        <button type="submit" class="btn-primary" style="padding:0.8rem 2rem;font-size:0.93rem;">
+                            <i data-lucide="save" style="width:16px;height:16px;"></i>
+                            Save Configuration
+                        </button>
+                    </div>
+                </form>
+
+                {% else %}
+                <!-- Non-admin: read-only display -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                    <div style="background:rgba(0,0,0,0.15);border:1px solid var(--glass-border);border-radius:14px;padding:1.5rem;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                            <i data-lucide="wifi" style="width:15px;height:15px;color:var(--accent-green);"></i>
+                            <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);">Default IP Range</span>
+                        </div>
+                        <div class="info-value info-value-green">{{ global_cfg.default_ip_range }}</div>
+                    </div>
+                    <div style="background:rgba(0,0,0,0.15);border:1px solid var(--glass-border);border-radius:14px;padding:1.5rem;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:1rem;">
+                            <i data-lucide="clock" style="width:15px;height:15px;color:var(--accent-green);"></i>
+                            <span style="font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-muted);">Scan Interval</span>
+                        </div>
+                        <div class="info-value info-value-green">{{ global_cfg.get_scan_interval_display }}</div>
+                    </div>
+                </div>
+                <p style="margin-top:1.5rem;font-size:0.82rem;color:var(--text-muted);display:flex;align-items:center;gap:0.5rem;">
+                    <i data-lucide="info" style="width:13px;height:13px;"></i>
+                    Contact an administrator to change these settings.
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+    </div><!-- /main-wrapper -->
+
+
+    <!-- ════════════ ADD CONTACT MODAL ════════════ -->
+    <div class="modal-overlay" id="add-modal" onclick="handleOverlayClick(event, 'add-modal')">
+        <div class="modal-box">
+            <div class="modal-title">
+                <i data-lucide="user-plus" style="width:22px;height:22px;"></i>
+                Add New Contact
+            </div>
+            <form method="POST" action="{% url 'settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_contact">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label class="form-label">Full Name *</label>
+                        {{ contact_form.name }}
+                        {% if not edit_contact %}
+                            {% for err in contact_form.name.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+                        {% endif %}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Role *</label>
+                        {{ contact_form.role }}
+                        {% if not edit_contact %}
+                            {% for err in contact_form.role.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+                        {% endif %}
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email *</label>
+                        {{ contact_form.email }}
+                        {% if not edit_contact %}
+                            {% for err in contact_form.email.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+                        {% endif %}
+                    </div>
+                    <div class="form-group full">
+                        <label class="form-label">Contact Number</label>
+                        {{ contact_form.contact_number }}
+                        {% if not edit_contact %}
+                            {% for err in contact_form.contact_number.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:2rem;">
+                    <button type="button" class="btn-ghost" onclick="closeModal('add-modal')">Cancel</button>
+                    <button type="submit" class="btn-primary">
+                        <i data-lucide="check" style="width:15px;height:15px;"></i>
+                        Save Contact
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ════════════ EDIT CONTACT MODAL ════════════ -->
+    <div class="modal-overlay" id="edit-modal" onclick="handleOverlayClick(event, 'edit-modal')">
+        <div class="modal-box">
+            <div class="modal-title">
+                <i data-lucide="pencil" style="width:22px;height:22px;"></i>
+                Edit Contact
+            </div>
+            <form method="POST" action="{% url 'settings' %}" id="edit-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="edit_contact">
+                <input type="hidden" name="contact_id" id="edit-contact-id">
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label class="form-label">Full Name *</label>
+                        <input type="text" name="name" id="edit-name" class="settings-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Role *</label>
+                        <select name="role" id="edit-role" class="settings-select">
+                            <option value="CISO">CISO</option>
+                            <option value="IT_MGMT">IT Management</option>
+                            <option value="STAFF">Staff Member</option>
+                            <option value="SOC">SOC Analyst</option>
+                            <option value="NETADMIN">Network Admin</option>
+                            <option value="SYSADMIN">System Admin</option>
+                            <option value="HELPDESK">Help Desk</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email *</label>
+                        <input type="email" name="email" id="edit-email" class="settings-input" required>
+                    </div>
+                    <div class="form-group full">
+                        <label class="form-label">Contact Number</label>
+                        <input type="text" name="contact_number" id="edit-phone" class="settings-input">
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;justify-content:flex-end;margin-top:2rem;">
+                    <button type="button" class="btn-ghost" onclick="closeModal('edit-modal')">Cancel</button>
+                    <button type="submit" class="btn-primary">
+                        <i data-lucide="save" style="width:15px;height:15px;"></i>
+                        Save Changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ════════════ DELETE CONFIRM MODAL ════════════ -->
+    <div class="modal-overlay" id="delete-modal" onclick="handleOverlayClick(event, 'delete-modal')">
+        <div class="modal-box" style="max-width:420px;">
+            <div class="modal-title" style="color:var(--accent-red);">
+                <i data-lucide="trash-2" style="width:22px;height:22px;color:var(--accent-red);"></i>
+                Delete Contact
+            </div>
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:0.5rem;">
+                Are you sure you want to permanently delete
+            </p>
+            <p style="color:var(--text-main);font-weight:700;font-size:1rem;margin-bottom:2rem;" id="delete-contact-name">—</p>
+            <form method="POST" action="{% url 'settings' %}">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="delete_contact">
+                <input type="hidden" name="contact_id" id="delete-contact-id">
+                <div style="display:flex;gap:1rem;justify-content:flex-end;">
+                    <button type="button" class="btn-ghost" onclick="closeModal('delete-modal')">Cancel</button>
+                    <button type="submit" class="btn-danger" style="padding:0.7rem 1.4rem;font-size:0.88rem;">
+                        <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+                        Yes, Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // ── Sidebar toggle ───────────────────────────────────────────
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title   = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity    = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        // ── Modal helpers ────────────────────────────────────────────
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        function handleOverlayClick(e, id) {
+            if (e.target === document.getElementById(id)) closeModal(id);
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') {
+                ['add-modal', 'edit-modal', 'delete-modal'].forEach(closeModal);
+            }
+        });
+
+        // ── Add contact ──────────────────────────────────────────────
+        function openAddModal() { openModal('add-modal'); }
+
+        // ── Edit contact ─────────────────────────────────────────────
+        function openEditModal(id, name, role, email, phone) {
+            document.getElementById('edit-contact-id').value = id;
+            document.getElementById('edit-name').value        = name;
+            document.getElementById('edit-role').value        = role;
+            document.getElementById('edit-email').value       = email;
+            document.getElementById('edit-phone').value       = phone;
+            openModal('edit-modal');
+        }
+
+        // ── Delete contact ───────────────────────────────────────────
+        function openDeleteModal(id, name) {
+            document.getElementById('delete-contact-id').value  = id;
+            document.getElementById('delete-contact-name').textContent = name;
+            openModal('delete-modal');
+        }
+
+        // ── Auto-dismiss flash toast after 5s ────────────────────────
+        const flash = document.getElementById('flash-msg');
+        if (flash) {
+            setTimeout(() => {
+                flash.style.transition = 'opacity 0.5s ease';
+                flash.style.opacity    = '0';
+                setTimeout(() => flash.remove(), 500);
+            }, 5000);
+        }
+
+        // ── If there were form errors on add, re-open the modal ──────
+        {% if error_msg and not edit_contact %}
+            {% if contact_form.errors %}
+            openAddModal();
+            {% endif %}
+        {% endif %}
+    </script>
+</body>
+</html>

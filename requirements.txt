@@ -1,0 +1,6 @@
+Django>=4.2
+flask>=3.0
+flask-cors>=4.0
+scapy>=2.5
+python-nmap>=0.7
+mac-vendor-lookup>=0.1.11

@@ -1,0 +1,533 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Account — Monitor OS</title>
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Override global body overflow:hidden set in index.css so this page scrolls */
+        html,
+        body {
+            overflow-y: auto !important;
+            height: auto !important;
+        }
+
+        .account-page {
+            display: flex;
+            width: 100%;
+            min-height: 100vh;
+            background: var(--bg-deep);
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        .account-page::before {
+            content: '';
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            filter: blur(130px);
+            opacity: 0.1;
+            top: -200px;
+            right: -150px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px;
+            min-width: 80px;
+            height: 100vh;
+            position: sticky;
+            top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            z-index: 100;
+            padding: 2.5rem 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            overflow: hidden;
+            transition: width 0.2s ease;
+        }
+
+        .sidebar.expanded {
+            width: 220px;
+            min-width: 220px;
+        }
+
+        .sidebar-btn {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 1rem;
+            border-radius: 16px;
+            font-weight: 500;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-decoration: none;
+        }
+
+        .sidebar-btn span {
+            opacity: 0;
+            transition: opacity 0.15s ease;
+        }
+
+        .sidebar.expanded .sidebar-btn span {
+            opacity: 1;
+        }
+
+        .sidebar-btn:hover {
+            background: var(--glass-bg-hover);
+            border-color: rgba(51, 153, 51, 0.3);
+        }
+
+        .sidebar-btn.active {
+            background: rgba(51, 153, 51, 0.12);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .header-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .header-toggle:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        /* ── Main ── */
+        .main-wrapper {
+            flex: 1;
+            padding: 2rem 2.5rem 4rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            position: relative;
+            z-index: 1;
+            max-width: 1000px;
+        }
+
+        .page-title {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .page-title i {
+            color: var(--accent-green);
+        }
+
+        /* ── Profile Hero ── */
+        .profile-hero {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            box-shadow: var(--glass-shadow);
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .hero-avatar {
+            width: 100px;
+            height: 100px;
+            border-radius: 22px;
+            border: 2px solid var(--accent-green);
+            overflow: hidden;
+            flex-shrink: 0;
+            box-shadow: 0 0 30px rgba(51, 153, 51, 0.25);
+        }
+
+        .hero-avatar img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .hero-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .hero-name {
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin-bottom: 0.3rem;
+        }
+
+        .hero-email {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 0.8rem;
+        }
+
+        .hero-badges {
+            display: flex;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .badge-pill {
+            padding: 0.35rem 0.9rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: 1px solid;
+        }
+
+        .badge-green {
+            background: rgba(51, 153, 51, 0.1);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .badge-blue {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+        }
+
+        .hero-bio {
+            margin-top: 1rem;
+            font-size: 0.88rem;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* ── Stats row ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.25rem;
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem 2rem;
+            box-shadow: var(--glass-shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        .stat-card:hover {
+            border-color: var(--accent-green);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 20px rgba(51, 153, 51, 0.1);
+        }
+
+        .stat-icon {
+            color: var(--accent-green);
+            margin-bottom: 0.3rem;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--text-main);
+            line-height: 1;
+        }
+
+        .stat-desc {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        /* ── Activity log ── */
+        .activity-section {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 2rem 2.5rem;
+            box-shadow: var(--glass-shadow);
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-green);
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .activity-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .activity-table th {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            padding: 0.6rem 0.9rem;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .activity-table td {
+            padding: 0.9rem 0.9rem;
+            font-size: 0.88rem;
+            color: var(--text-main);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            vertical-align: middle;
+        }
+
+        .activity-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .activity-table tr:hover td {
+            background: rgba(51, 153, 51, 0.04);
+        }
+
+        .event-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 0.3rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border: 1px solid;
+        }
+
+        .event-login {
+            background: rgba(51, 153, 51, 0.12);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .event-logout {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 750px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .profile-hero {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body class="account-page">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div
+            style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title"
+                style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'account' %}">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Content -->
+    <div class="main-wrapper">
+        <div class="page-title">
+            <i data-lucide="user-circle" style="width:28px;height:28px;"></i>
+            My Account
+        </div>
+
+        <!-- Profile Hero -->
+        <div class="profile-hero">
+            <div class="hero-avatar">
+                <img src="{{ avatar_url }}" alt="Avatar">
+            </div>
+            <div class="hero-info">
+                <div class="hero-name">{{ username }}</div>
+                <div class="hero-email">
+                    {% if profile.email %}{{ profile.email }}{% else %}No email set — <a href="{% url 'settings' %}"
+                        style="color:var(--accent-green);">add one</a>{% endif %}
+                </div>
+                <div class="hero-badges">
+                    <span class="badge-pill badge-green">Active User</span>
+                    <span class="badge-pill badge-blue">Member since {{ member_since|date:"M Y" }}</span>
+                </div>
+                {% if profile.bio %}
+                <div class="hero-bio">"{{ profile.bio }}"</div>
+                {% endif %}
+            </div>
+            <a href="{% url 'edit_profile' %}" style="display:inline-flex;align-items:center;gap:8px;padding:0.7rem 1.3rem;
+                      background:rgba(51,153,51,0.08);border:1px solid rgba(51,153,51,0.35);
+                      border-radius:12px;color:var(--accent-green);font-weight:600;
+                      font-size:0.85rem;text-decoration:none;transition:all 0.15s ease;"
+                onmouseover="this.style.background='rgba(51,153,51,0.18)'"
+                onmouseout="this.style.background='rgba(51,153,51,0.08)'">
+                <i data-lucide="edit-2" style="width:15px;height:15px;"></i>
+                Edit Profile
+            </a>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <i data-lucide="log-in" class="stat-icon" style="width:22px;height:22px;"></i>
+                <div class="stat-number">{{ total_logins }}</div>
+                <div class="stat-desc">Total Logins</div>
+            </div>
+            <div class="stat-card">
+                <i data-lucide="calendar" class="stat-icon" style="width:22px;height:22px;"></i>
+                <div class="stat-number" style="font-size:1.2rem;line-height:1.4;">
+                    {{ member_since|date:"d M Y" }}
+                </div>
+                <div class="stat-desc">Member Since</div>
+            </div>
+            <div class="stat-card" style="cursor:pointer;" onclick="window.location='{% url 'security_logs' %}'">
+                <i data-lucide="shield-alert" class="stat-icon" style="width:22px;height:22px;"></i>
+                <div class="stat-number" style="font-size:1rem;color:var(--accent-green);">View Logs</div>
+                <div class="stat-desc">Security Audit Trail</div>
+            </div>
+        </div>
+
+        <!-- Security Logs shortcut notice -->
+        <div class="activity-section">
+            <div class="section-title">
+                <i data-lucide="shield-check" style="width:16px;height:16px;"></i>
+                Login History Moved
+            </div>
+            <div style="color:var(--text-muted);font-size:0.9rem;line-height:1.7;">
+                Your login, logout, and failed attempt history is now available in the centralized
+                <strong style="color:var(--accent-green);">Security Logs</strong> section.
+            </div>
+            <a href="{% url 'security_logs' %}" style="display:inline-flex;align-items:center;gap:8px;
+                      margin-top:1.2rem;padding:0.7rem 1.4rem;
+                      background:rgba(51,153,51,0.08);border:1px solid rgba(51,153,51,0.35);
+                      border-radius:12px;color:var(--accent-green);font-weight:600;
+                      font-size:0.88rem;text-decoration:none;transition:all 0.15s ease;"
+                onmouseover="this.style.background='rgba(51,153,51,0.18)'"
+                onmouseout="this.style.background='rgba(51,153,51,0.08)'">
+                <i data-lucide="external-link" style="width:15px;height:15px;"></i>
+                Open Security Logs
+            </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+    </script>
+</body>
+
+</html>

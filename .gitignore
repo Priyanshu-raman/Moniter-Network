@@ -1,0 +1,50 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# === Virtual Environments ===
+venv/
+env/
+.env
+.venv/
+
+# === Django ===
+*.log
+local_settings.py
+db.sqlite3
+media/
+
+# === Flask / App specific ===
+instance/
+*.sqlite
+
+# === Sensitive / Credentials ===
+secrets.py
+config.py
+.env
+.env.local
+
+# === OS Files ===
+.DS_Store
+Thumbs.db
+
+# === IDE Files ===
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# === Node (if any) ===
+node_modules/
+npm-debug.log
+
+# === Temp/Scratch scripts ===
+fix_map.py
+fix_quotes.py
+patch_sidebar.py
+check_django.py
+test_scapy.py
+django_check_output.txt

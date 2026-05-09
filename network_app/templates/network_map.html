@@ -1,0 +1,512 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Map — Monitor OS</title>
+    <meta name="description" content="Visual subnet-aware network topology map showing device clusters by zone.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Vis.js Network -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <style>
+        html, body { overflow: hidden !important; height: 100vh !important; margin: 0; }
+
+        .map-page {
+            display: flex; width: 100%; height: 100vh;
+            background: var(--bg-deep); position: relative; overflow: hidden;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease; flex-shrink: 0;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(51,153,51,0.3); }
+        .sidebar-btn.active { background: rgba(59,130,246,0.12); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        /* ── Main wrapper ── */
+        .main-wrapper {
+            flex: 1; display: flex; flex-direction: column;
+            height: 100%; overflow: hidden; position: relative;
+        }
+
+        /* ── Top bar ── */
+        .topbar {
+            display: flex; align-items: center; gap: 1.25rem;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            z-index: 50; flex-shrink: 0;
+        }
+        .topbar-title {
+            font-size: 1.2rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 0.75rem;
+        }
+        .topbar-title i { color: var(--accent-blue); }
+
+        /* ── Zone legend ── */
+        .zone-legend {
+            display: flex; align-items: center; gap: 0.75rem;
+            margin-left: auto; flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex; align-items: center; gap: 6px;
+            font-size: 0.78rem; font-weight: 600;
+            padding: 0.35rem 0.75rem; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.03);
+            white-space: nowrap;
+        }
+        .legend-dot {
+            width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+        }
+
+        /* ── Map canvas ── */
+        #network-canvas {
+            flex: 1; width: 100%; overflow: hidden; position: relative;
+            background: transparent;
+        }
+        #vis-container {
+            width: 100%; height: 100%;
+        }
+
+        /* ── Empty state ── */
+        .empty-map {
+            flex: 1; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 1.5rem;
+            color: var(--text-muted); text-align: center;
+            padding: 2rem;
+        }
+        .empty-map i { opacity: 0.3; }
+        .empty-map p { font-size: 1rem; max-width: 380px; line-height: 1.7; }
+
+        /* ── Node detail panel ── */
+        .detail-panel {
+            position: absolute; right: 1.5rem; top: 1.5rem;
+            width: 280px;
+            background: rgba(17, 25, 35, 0.85);
+            backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 1.5rem;
+            box-shadow: var(--glass-shadow);
+            z-index: 200; display: none;
+        }
+        .detail-panel.show { display: block; }
+        .detail-close {
+            position: absolute; top: 0.75rem; right: 0.75rem;
+            background: transparent; border: none; color: var(--text-muted);
+            cursor: pointer; padding: 4px; border-radius: 6px;
+            transition: all 0.15s ease;
+        }
+        .detail-close:hover { color: var(--accent-red); background: rgba(239,68,68,0.1); }
+        .detail-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 1rem; }
+        .detail-ip { font-size: 1.3rem; font-weight: 800; color: var(--accent-blue); margin-bottom: 0.5rem; font-family: monospace; }
+        .detail-row { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 0.85rem; }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-key { color: var(--text-muted); }
+        .detail-val { font-weight: 600; color: var(--text-main); }
+
+        /* ── Controls ── */
+        .map-controls {
+            position: absolute; bottom: 1.5rem; left: 1.5rem;
+            display: flex; flex-direction: column; gap: 0.5rem; z-index: 100;
+        }
+        .ctrl-btn {
+            width: 40px; height: 40px;
+            background: rgba(17,25,35,0.9); border: 1px solid var(--glass-border);
+            border-radius: 12px; color: var(--text-main); font-size: 1.1rem;
+            cursor: pointer; transition: all 0.15s ease;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .ctrl-btn:hover { border-color: var(--accent-blue); color: var(--accent-blue); background: rgba(59,130,246,0.1); }
+    </style>
+</head>
+
+<body class="map-page">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'network_map' %}">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-wrapper">
+        <!-- Top bar -->
+        <div class="topbar">
+            <div class="topbar-title">
+                <i data-lucide="network" style="width:22px;height:22px;"></i>
+                Subnet Network Map
+            </div>
+
+            <!-- Zone legend (built dynamically) -->
+            <div class="zone-legend" id="zone-legend"></div>
+
+            <div style="display:flex;gap:0.5rem;margin-left:{% if not zones_json %}auto{% endif %};">
+                <button onclick="fitNetwork()" style="display:inline-flex;align-items:center;gap:6px;
+                        padding:0.5rem 1rem;background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.35);
+                        color:var(--accent-blue);border-radius:10px;cursor:pointer;font-size:0.82rem;font-weight:600;
+                        transition:all 0.15s ease;"
+                    onmouseover="this.style.background='rgba(59,130,246,0.2)'"
+                    onmouseout="this.style.background='rgba(59,130,246,0.1)'">
+                    <i data-lucide="maximize-2" style="width:14px;height:14px;"></i>
+                    Fit View
+                </button>
+            </div>
+        </div>
+
+        <!-- Map canvas area -->
+        <div id="network-canvas">
+            {% if zones_json != '[]' %}
+            <div id="vis-container"></div>
+
+            <!-- Node detail panel -->
+            <div class="detail-panel" id="detail-panel">
+                <button class="detail-close" id="detail-close" onclick="document.getElementById('detail-panel').classList.remove('show')">
+                    <i data-lucide="x" style="width:14px;height:14px;"></i>
+                </button>
+                <div class="detail-title">Device Details</div>
+                <div class="detail-ip" id="dp-ip">—</div>
+                <div class="detail-row"><span class="detail-key">Zone</span><span class="detail-val" id="dp-zone">—</span></div>
+                <div class="detail-row"><span class="detail-key">Role</span><span class="detail-val" id="dp-role">—</span></div>
+                <div class="detail-row"><span class="detail-key">Type</span><span class="detail-val" id="dp-type">—</span></div>
+                <div class="detail-row"><span class="detail-key">MAC</span><span class="detail-val" id="dp-mac" style="font-size:0.78rem;font-family:monospace;">—</span></div>
+                <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" id="dp-status">—</span></div>
+            </div>
+
+            <!-- Map controls -->
+            <div class="map-controls">
+                <button class="ctrl-btn" onclick="zoomIn()" title="Zoom in">+</button>
+                <button class="ctrl-btn" onclick="zoomOut()" title="Zoom out">−</button>
+                <button class="ctrl-btn" onclick="fitNetwork()" title="Fit">
+                    <i data-lucide="maximize-2" style="width:14px;height:14px;"></i>
+                </button>
+            </div>
+
+            {% else %}
+            <div class="empty-map">
+                <i data-lucide="network" style="width:64px;height:64px;"></i>
+                <h2 style="font-size:1.3rem;font-weight:800;color:var(--text-main);margin:0;">No Devices Found</h2>
+                <p>
+                    Scan your network from the <a href="{% url 'dashboard' %}" style="color:var(--accent-blue);">Dashboard</a>
+                    to populate the map. Devices will be auto-grouped into subnet zones (SOC, Admin, Corporate, Servers/DMZ).
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        // ── Cytoscape.js Network Map ──────────────────────────────────────────────────
+
+        const zonesData = {{ zones_json|safe }};
+        let cy = null;
+
+        if (zonesData && zonesData.length > 0) {
+            buildLegend(zonesData);
+            buildNetwork(zonesData);
+        }
+
+        function buildLegend(zones) {
+            const container = document.getElementById('zone-legend');
+            zones.forEach(zone => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.style.borderColor = zone.color + '55';
+                item.innerHTML = `
+                    <div class="legend-dot" style="background:${zone.color};box-shadow:0 0 6px ${zone.color}88;"></div>
+                    <span style="color:${zone.color};">${zone.name}</span>
+                    <span style="color:var(--text-muted);font-weight:400;">(${zone.devices.length})</span>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function buildNetwork(zones) {
+            const elements = [];
+            const zoneHubs = {};
+
+            zones.forEach((zone, zIdx) => {
+                const hubId = `hub_${zIdx}`;
+                zoneHubs[zIdx] = hubId;
+
+                elements.push({
+                    data: {
+                        id: hubId,
+                        label: zone.name,
+                        type: 'hub',
+                        color: zone.color,
+                        zone: zone.name
+                    }
+                });
+
+                zone.devices.forEach((dev) => {
+                    const nodeId = `dev_${dev.id}`;
+                    elements.push({
+                        data: {
+                            id: nodeId,
+                            label: dev.ip,
+                            type: 'device',
+                            color: zone.color,
+                            device: dev,
+                            zone: zone.name
+                        }
+                    });
+
+                    elements.push({
+                        data: {
+                            id: `edge_${hubId}_${nodeId}`,
+                            source: hubId,
+                            target: nodeId,
+                            color: zone.color
+                        }
+                    });
+                });
+            });
+
+            for (let i = 0; i < zones.length - 1; i++) {
+                elements.push({
+                    data: {
+                        id: `hub_edge_${i}`,
+                        source: `hub_${i}`,
+                        target: `hub_${i + 1}`,
+                        color: 'rgba(255,255,255,0.2)'
+                    }
+                });
+            }
+
+            cy = cytoscape({
+                container: document.getElementById('vis-container'),
+                elements: elements,
+                style: [
+                    {
+                        selector: 'node[type="hub"]',
+                        style: {
+                            'shape': 'round-rectangle',
+                            'background-color': 'data(color)',
+                            'background-opacity': 0.2,
+                            'border-width': 2,
+                            'border-color': 'data(color)',
+                            'label': 'data(label)',
+                            'color': 'data(color)',
+                            'font-size': '14px',
+                            'font-weight': 'bold',
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'width': '80px',
+                            'height': '30px'
+                        }
+                    },
+                    {
+                        selector: 'node[type="device"]',
+                        style: {
+                            'shape': 'ellipse',
+                            'background-color': 'data(color)',
+                            'background-opacity': 0.3,
+                            'border-width': 1.5,
+                            'border-color': 'data(color)',
+                            'label': 'data(label)',
+                            'color': '#cdd5e0',
+                            'font-size': '10px',
+                            'text-valign': 'bottom',
+                            'text-margin-y': 5,
+                            'width': '16px',
+                            'height': '16px'
+                        }
+                    },
+                    {
+                        selector: 'node:selected',
+                        style: {
+                            'border-width': 3,
+                            'border-color': '#fff'
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 1.5,
+                            'line-color': 'data(color)',
+                            'opacity': 0.6,
+                            'curve-style': 'bezier'
+                        }
+                    },
+                    {
+                        selector: 'edge[color="rgba(255,255,255,0.2)"]',
+                        style: {
+                            'width': 2,
+                            'line-style': 'dashed',
+                            'opacity': 0.8
+                        }
+                    }
+                ],
+                layout: {
+                    name: 'cose',
+                    animate: true,
+                    nodeRepulsion: 400000,
+                    idealEdgeLength: 80
+                }
+            });
+
+            // Hover effects
+            cy.on('mouseover', 'node', function(e) {
+                const node = e.target;
+                node.style('background-opacity', 0.8);
+                document.body.style.cursor = 'pointer';
+            });
+            cy.on('mouseout', 'node', function(e) {
+                const node = e.target;
+                node.style('background-opacity', node.data('type') === 'hub' ? 0.2 : 0.3);
+                document.body.style.cursor = 'default';
+            });
+
+            // Click event -> show details
+            cy.on('tap', 'node', function(evt){
+                const node = evt.target;
+                if (node.data('type') === 'device' && node.data('device')) {
+                    openDeviceDetailsMap(node.data('device').ip);
+                } else {
+                    document.getElementById('detail-panel').classList.remove('show');
+                }
+            });
+            
+            cy.on('tap', function(evt) {
+                if (evt.target === cy) {
+                    document.getElementById('detail-panel').classList.remove('show');
+                }
+            });
+        }
+
+        async function openDeviceDetailsMap(ip) {
+            const panel = document.getElementById('detail-panel');
+            panel.classList.add('show');
+            panel.innerHTML = `<button class="detail-close" id="detail-close" onclick="document.getElementById('detail-panel').classList.remove('show')"><i data-lucide="x" style="width:14px;height:14px;"></i></button><div class="detail-title">Device Intelligence</div><div style="text-align:center;color:var(--text-muted);padding:1rem;"><i data-lucide="refresh-cw" class="animate-spin" style="width:20px;height:20px;margin-bottom:10px;"></i><br>Live Scanning...</div>`;
+            lucide.createIcons();
+            
+            try {
+                const res = await fetch("http://127.0.0.1:5000/api/device_details?ip=" + ip);
+                const data = await res.json();
+                
+                let portsHtml = data.open_ports.length > 0 ? data.open_ports.map(p => `<span style="background:rgba(51,153,51,0.2); padding:2px 4px; border-radius:4px; font-size:0.7rem; border:1px solid var(--accent-green); color:var(--accent-green); margin-right:2px;">${p}</span>`).join('') : '<span style="color:var(--text-muted);">None</span>';
+                let statusColor = data.status === 'ACTIVE' ? 'var(--accent-green)' : 'var(--accent-red)';
+                
+                panel.innerHTML = `
+                    <button class="detail-close" id="detail-close" onclick="document.getElementById('detail-panel').classList.remove('show')">
+                        <i data-lucide="x" style="width:14px;height:14px;"></i>
+                    </button>
+                    <div class="detail-title">Live Device Intelligence</div>
+                    <div class="detail-ip" id="dp-ip" style="font-size:1.1rem;word-break:break-all;">${data.ip}</div>
+                    <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" style="color:${statusColor}">${data.status}</span></div>
+                    <div class="detail-row"><span class="detail-key">MAC</span><span class="detail-val" style="font-size:0.75rem;font-family:monospace;">${data.mac}</span></div>
+                    <div class="detail-row"><span class="detail-key">Hostname</span><span class="detail-val" style="font-size:0.8rem;">${data.hostname}</span></div>
+                    <div class="detail-row"><span class="detail-key">OS</span><span class="detail-val">${data.os}</span></div>
+                    <div class="detail-row"><span class="detail-key">Ping</span><span class="detail-val">${data.ping_status}</span></div>
+                    <div class="detail-row"><span class="detail-key">Threat</span><span class="detail-val" style="color:${data.threat_severity === 'High' ? 'var(--accent-red)' : (data.threat_severity === 'Medium' ? 'var(--accent-orange)' : 'var(--accent-green)')}">${data.threat_severity}</span></div>
+                    <div style="margin-top:1rem; border-top:1px solid var(--glass-border); padding-top:0.5rem;">
+                        <div class="detail-key" style="margin-bottom:0.3rem;">Open Ports</div>
+                        <div>${portsHtml}</div>
+                    </div>
+                `;
+                lucide.createIcons();
+            } catch(e) {
+                panel.innerHTML = `<button class="detail-close" onclick="document.getElementById('detail-panel').classList.remove('show')"><i data-lucide="x" style="width:14px;height:14px;"></i></button><div class="detail-title">Error</div><div style="color:var(--accent-red);">Failed to scan.<br>${e.message}</div>`;
+                lucide.createIcons();
+            }
+        }
+
+        function fitNetwork() {
+            if (cy) cy.fit();
+        }
+
+        function zoomIn() {
+            if (cy) cy.zoom(cy.zoom() * 1.25);
+        }
+
+        function zoomOut() {
+            if (cy) cy.zoom(cy.zoom() * 0.8);
+        }
+
+    </script>
+</body>
+</html>

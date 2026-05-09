@@ -1,0 +1,1131 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Monitor OS</title>
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .dashboard-page {
+            display: flex;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden;
+            background: var(--bg-deep);
+            position: relative;
+        }
+
+        /* Brighter Orbs to distort through the glass */
+        .dashboard-page::before,
+        .dashboard-page::after {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: 0;
+            opacity: 0.25;
+            pointer-events: none;
+            animation: float 15s infinite linear;
+            will-change: transform;
+        }
+
+        .dashboard-page::before {
+            background: var(--accent-green);
+            top: -200px;
+            right: -100px;
+        }
+
+        .dashboard-page::after {
+            background: var(--accent-green-light);
+            bottom: -200px;
+            left: -100px;
+            animation-delay: -12s;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0) scale(1);
+            }
+
+            100% {
+                transform: translate(150px, 150px) scale(1.1);
+            }
+        }
+
+        .main-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            padding: 1.5rem;
+            gap: 1.5rem;
+            overflow: hidden;
+            transition: transform 0.1s ease, opacity 0.1s ease;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            padding: 0 1.5rem;
+            gap: 1.5rem;
+            position: relative;
+            z-index: 1000;
+            border-radius: 0 0 24px 24px;
+        }
+
+        .sidebar {
+            width: 80px;
+            min-width: 80px;
+            height: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            z-index: 1100;
+            transition: width 0.1s ease, transform 0.1s ease;
+            padding: 2.5rem 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sidebar.expanded {
+            width: var(--sidebar-width);
+            min-width: var(--sidebar-width);
+        }
+
+        .sidebar-btn {
+            background: transparent;
+            color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 1rem;
+            border-radius: 16px;
+            font-weight: 500;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .sidebar-btn span {
+            opacity: 0;
+            transition: opacity 0.1s ease;
+        }
+
+        .sidebar.expanded .sidebar-btn span {
+            opacity: 1;
+        }
+
+        .sidebar-btn:hover {
+            background: var(--glass-bg-hover);
+            border-color: rgba(51, 153, 51, 0.3);
+        }
+
+        .sidebar-btn.active {
+            background: rgba(51, 153, 51, 0.12);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .header-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 50px;
+            height: 50px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.1s ease;
+            flex-shrink: 0;
+        }
+
+        .header-toggle:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .search-container {
+            flex: 1;
+            max-width: 600px;
+            position: relative;
+        }
+
+        .search-bar {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 0.7rem 1.2rem;
+            padding-right: 3rem;
+            color: var(--text-main);
+            font-size: 0.9rem;
+            transition: all 0.1s ease;
+        }
+
+        .search-bar:focus {
+            border-color: var(--accent-green);
+            background: rgba(51, 153, 51, 0.04);
+            box-shadow: 0 0 25px rgba(51, 153, 51, 0.1);
+            outline: none;
+        }
+
+        .search-icon {
+            position: absolute;
+            right: 1.2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            margin-left: auto;
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .icon-btn:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: var(--accent-red);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid var(--bg-deep);
+        }
+
+        .avatar {
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.1s ease;
+        }
+
+        .avatar:hover {
+            border-color: var(--accent-green);
+            transform: scale(1.02);
+        }
+
+        .dashboard-content {
+            flex: 1;
+            padding: 0;
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 1.25rem;
+            overflow-y: auto;
+            position: relative;
+            z-index: 10;
+        }
+
+        .main-section {
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            min-width: 0;
+        }
+
+        .filters {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .filter-wrapper {
+            position: relative;
+        }
+
+        .filter-pill {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 0.7rem 1.4rem;
+            border-radius: 50px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.1s ease;
+            user-select: none;
+        }
+
+        .filter-pill:hover {
+            background: var(--glass-bg-hover);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .monitor-canvas {
+            padding: 2rem 2.5rem 6rem;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+            min-height: 500px;
+            background: rgba(0, 0, 0, 0.1);
+            /* Let global glass handle the main blur */
+        }
+
+        .device-card {
+            position: relative;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            min-height: 80px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.8rem;
+            color: var(--text-main);
+            backdrop-filter: blur(12px);
+            transition: all 0.1s ease;
+            margin-bottom: 0.5rem;
+        }
+
+        .device-card:hover {
+            background: rgba(51, 153, 51, 0.05);
+            border-color: var(--accent-green);
+            z-index: 100;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(51, 153, 51, 0.1);
+        }
+
+        .glass-dropdown {
+            position: absolute;
+            background: rgba(17, 25, 35, 0.65);
+            /* True glass transparency */
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-top: 1px solid var(--glass-border-highlight);
+            border-radius: 18px;
+            padding: 0.6rem;
+            box-shadow: var(--glass-shadow);
+            z-index: 9999;
+            top: 110%;
+            min-width: 240px;
+            display: none;
+        }
+
+        .glass-dropdown.show {
+            display: block;
+        }
+
+        .dropdown-item {
+            color: var(--text-main);
+            padding: 0.9rem 1.1rem;
+            border-radius: 12px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+        }
+
+        .dropdown-item:hover {
+            background: rgba(51, 153, 51, 0.1);
+            color: var(--accent-green);
+        }
+
+        .side-section {
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .data-box {
+            padding: 2rem;
+            transition: all 0.2s ease;
+        }
+
+        .data-label {
+            color: var(--accent-green);
+            font-size: 0.9rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            font-size: 0.95rem;
+        }
+
+        .stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 12px;
+        }
+
+        .stat-val {
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .device-tooltip {
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            transform: translateX(-50%) translateY(10px);
+            width: 300px;
+            background: rgba(17, 25, 35, 0.85);
+            backdrop-filter: blur(30px);
+            border: 1px solid var(--accent-green);
+            border-radius: 20px;
+            padding: 1.2rem;
+            box-shadow: var(--glass-shadow);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.1s ease;
+            z-index: 2000;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            pointer-events: none;
+        }
+
+        .device-card:hover .device-tooltip {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .tt-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .tt-value {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: row !important;
+        }
+    </style>
+</head>
+
+<body class="dashboard-page" id="body-container">
+    <aside class="sidebar" id="sidebar">
+        <div
+            style="font-size: 1.2rem; font-weight: 700; margin-bottom: 2rem; padding-left: 0.5rem; display: flex; align-items: center; gap: 20px; overflow: hidden; height: 60px; padding: 0 0.5rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width: 20px; height: 20px;"></i>
+            </button>
+            <span id="sidebar-title"
+                style="opacity: 0; transition: opacity 0.2s 0.1s ease; white-space: nowrap; visibility: hidden;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn active" href="{% url 'dashboard' %}" style="text-decoration:none;">
+            <i data-lucide="layout-dashboard" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="#" style="text-decoration:none;">
+            <i data-lucide="network" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" style="text-decoration:none;">
+            <i data-lucide="user" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}" style="text-decoration:none;">
+            <i data-lucide="settings" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Settings</span>
+        </a>
+
+        <div style="margin-top: auto;">
+            <a href="{% url 'logout' %}" style="text-decoration: none;">
+                <button class="sidebar-btn">
+                    <i data-lucide="log-out" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+                    <span>Exit</span>
+                </button>
+            </a>
+        </div>
+    </aside>
+
+    <div class="main-wrapper">
+        <header class="glass-panel">
+            <div class="search-container">
+                <input type="text" id="networkInput" class="search-bar"
+                    placeholder="Target Network (e.g. 192.168.1.0/24)" onkeyup="if(event.key === 'Enter') startScan()">
+                <i data-lucide="search" class="search-icon" onclick="startScan()"></i>
+            </div>
+
+            <div class="header-actions">
+                <button class="icon-btn" onclick="startScan()" title="Refresh">
+                    <i id="refresh-icon" data-lucide="refresh-cw" style="width: 18px; height: 18px;"></i>
+                </button>
+
+                <button class="icon-btn" onclick="toggleAlertModal()" title="Send Alert">
+                    <i data-lucide="alert-triangle" style="width: 18px; height: 18px; color: var(--accent-orange);"></i>
+                </button>
+
+                <div style="position: relative;">
+                    <button class="icon-btn" onclick="toggleDropdown(event, 'notif-dropdown')">
+                        <div id="notif-badge" class="badge" style="display: none;"></div>
+                        <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
+                    </button>
+                    <div id="notif-dropdown" class="glass-dropdown" style="right: 0; width: 300px;">
+                        <div style="padding: 0.8rem 1rem; font-weight: bold; font-size: 0.9rem; border-bottom: 1px solid var(--glass-border);"
+                            id="notif-header">
+                            No New Alerts
+                        </div>
+                        <div style="max-height: 400px; overflow-y: auto;" id="notif-list">
+                            <div
+                                style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                                All systems normal.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="position: relative;">
+                    <button class="avatar" onclick="toggleDropdown(event, 'profile-dropdown')"
+                        style="border: none; background: transparent; padding: 0;">
+                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed={{ username|urlencode }}" alt="User"
+                            style="width: 100%; height: 100%;">
+                    </button>
+                    <div id="profile-dropdown" class="glass-dropdown" style="right: 0;">
+                        <div
+                            style="padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--glass-border); margin-bottom: 0.5rem;">
+                            <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">User ID
+                            </div>
+                            <div style="font-size: 0.95rem; font-weight: 700; color: var(--accent-green);">
+                                {{ username|default:"Administrator" }}
+                            </div>
+                        </div>
+                        <div class="dropdown-item"><span>My Account</span></div>
+                        <div class="dropdown-item"><span>Settings</span></div>
+                        <hr style="border: none; border-top: 1px solid var(--glass-border); margin: 5px 0;">
+                        <a href="{% url 'logout' %}" style="text-decoration: none;">
+                            <div class="dropdown-item" style="color: var(--accent-red);">
+                                <i data-lucide="log-out" style="width: 16px; height: 16px;"></i> <span>Logout</span>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="dashboard-content">
+            <div class="main-section">
+                <div class="filters">
+                    <div class="filter-wrapper">
+                        <div class="filter-pill" onclick="toggleDropdown(event, 'sort-dropdown')">
+                            <i data-lucide="sort-desc" style="width: 16px; height: 16px;"></i> <span
+                                id="current-sort">Name (A-Z)</span> <i data-lucide="chevron-down"
+                                style="width: 14px; height: 14px;"></i>
+                        </div>
+                        <div id="sort-dropdown" class="glass-dropdown">
+                            <div class="dropdown-item" onclick="applySort('name_asc', 'Name (A-Z)')">Name (A-Z)</div>
+                            <div class="dropdown-item" onclick="applySort('name_desc', 'Name (Z-A)')">Name (Z-A)</div>
+                            <div class="dropdown-item" onclick="applySort('status', 'Status')">Status</div>
+                            <div class="dropdown-item" onclick="applySort('ip', 'IP Address')">IP Address</div>
+                        </div>
+                    </div>
+
+                    <div class="filter-wrapper">
+                        <div class="filter-pill" onclick="toggleDropdown(event, 'filter-dropdown')">
+                            <i data-lucide="filter" style="width: 16px; height: 16px;"></i> Filter: <span
+                                id="current-filter">All</span> <i data-lucide="chevron-down"
+                                style="width: 14px; height: 14px;"></i>
+                        </div>
+                        <div id="filter-dropdown" class="glass-dropdown">
+                            <div class="dropdown-item" onclick="applyFilter('ALL', 'All')">All Devices</div>
+                            <div class="dropdown-item" onclick="applyFilter('ACTIVE', 'Active')">Active Only</div>
+                            <div class="dropdown-item" onclick="applyFilter('OFFLINE', 'Offline')">Offline Only</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="monitor-canvas glass-panel" id="deviceContainer">
+                    <div style="color: var(--text-muted); text-align: center; margin-top: 2rem;">
+                        No devices found. Enter network IP and scan.
+                    </div>
+                </div>
+            </div>
+
+            <aside class="side-section">
+                <div class="data-box glass-panel">
+                    <div class="data-label">All Devices (<span id="stat-total">0</span>)</div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot"
+                                style="background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green);"></span>Active
+                        </div>
+                        <div class="stat-val" id="stat-active">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot"
+                                style="background: var(--accent-red); box-shadow: 0 0 5px var(--accent-red);"></span>Inactive
+                        </div>
+                        <div class="stat-val" id="stat-inactive">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-blue);"></span>Level 1 Esc.</div>
+                        <div class="stat-val" id="stat-l1">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-orange);"></span>Level 2 Esc.</div>
+                        <div class="stat-val" id="stat-l2">0</div>
+                    </div>
+                    <div class="stat-row" style="color: #ef4444;">
+                        <div><span class="stat-dot" style="background: var(--accent-red);"></span>Level 3 Esc.</div>
+                        <div class="stat-val" id="stat-l3">0</div>
+                    </div>
+                </div>
+
+                <div class="data-box glass-panel">
+                    <div class="data-label">Network Assets</div>
+                    <div class="stat-row">
+                        <div>💻 PCs / Workstations</div>
+                        <div class="stat-val" id="stat-pc">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div>📱 Mobiles</div>
+                        <div class="stat-val" id="stat-mobile">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div>🖧 Routers / Switches</div>
+                        <div class="stat-val" id="stat-router">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div>🗄️ Servers / DBs</div>
+                        <div class="stat-val" id="stat-server">0</div>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Alert Modal -->
+    <div id="alertModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+        <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:20px; padding:2rem; width:400px; max-width:90%; box-shadow:var(--glass-shadow); position:relative;">
+            <button onclick="toggleAlertModal()" style="position:absolute; top:1rem; right:1rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer;">
+                <i data-lucide="x" style="width:20px;height:20px;"></i>
+            </button>
+            <h2 style="margin-top:0; color:var(--text-main); font-size:1.4rem; display:flex; align-items:center; gap:0.5rem;">
+                <i data-lucide="alert-triangle" style="color:var(--accent-orange);"></i> Send Alert
+            </h2>
+            
+            <form id="alertForm" style="display:flex; flex-direction:column; gap:1rem; margin-top:1.5rem;" onsubmit="submitAlert(event)">
+                <div>
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Alert Type</label>
+                    <select id="alertType" required style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;" onchange="toggleAlertFields()">
+                        <option value="Email">Email</option>
+                        <option value="Broadcast">Broadcast</option>
+                        <option value="Webhook">Webhook</option>
+                    </select>
+                </div>
+                
+                <div id="emailField">
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Email Receiver</label>
+                    <input type="email" id="alertEmail" value="{{ user.email }}" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;">
+                </div>
+
+                <div id="webhookField" style="display:none;">
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Webhook URL (Discord/Slack/Teams)</label>
+                    <div style="display:flex; gap:0.5rem;">
+                        <input type="url" id="alertWebhook" placeholder="https://..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;">
+                        <button type="button" onclick="testWebhook()" style="background:rgba(51,153,51,0.2); border:1px solid var(--accent-green); color:var(--accent-green); padding:0 1rem; border-radius:12px; cursor:pointer;">Test</button>
+                    </div>
+                </div>
+
+                <div>
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Severity</label>
+                    <select id="alertSeverity" required style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Subject / Title</label>
+                    <input type="text" id="alertSubject" required style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;">
+                </div>
+
+                <div>
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Message</label>
+                    <textarea id="alertMessage" required rows="3" style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px; resize:none;"></textarea>
+                </div>
+
+                <button type="submit" style="background:var(--accent-green); color:#fff; border:none; padding:0.8rem; border-radius:12px; font-weight:700; cursor:pointer; margin-top:0.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center;">
+                    <i data-lucide="send" style="width:16px;height:16px;"></i> Send Alert
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Device Details Modal -->
+    <div id="deviceModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+        <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:20px; padding:2.5rem; width:550px; max-width:90%; box-shadow:var(--glass-shadow); position:relative;">
+            <button onclick="closeDeviceDetails()" style="position:absolute; top:1.5rem; right:1.5rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer;">
+                <i data-lucide="x" style="width:24px;height:24px;"></i>
+            </button>
+            <h2 style="margin-top:0; color:var(--text-main); font-size:1.6rem; display:flex; align-items:center; gap:0.5rem; border-bottom:1px solid var(--glass-border); padding-bottom:1rem;">
+                <i data-lucide="monitor" style="color:var(--accent-blue);"></i> Device Intelligence
+            </h2>
+            
+            <div id="deviceModalContent" style="margin-top:1.5rem; display:flex; flex-direction:column; gap:1rem;">
+                <div style="text-align:center; color:var(--text-muted);"><i data-lucide="refresh-cw" class="animate-spin" style="width:24px;height:24px;"></i><br>Analyzing Device...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleAlertModal() {
+            const modal = document.getElementById('alertModal');
+            if(modal.style.display === 'none') {
+                modal.style.display = 'flex';
+            } else {
+                modal.style.display = 'none';
+            }
+        }
+
+        function toggleAlertFields() {
+            const type = document.getElementById('alertType').value;
+            document.getElementById('emailField').style.display = (type === 'Email') ? 'block' : 'none';
+            document.getElementById('webhookField').style.display = (type === 'Webhook') ? 'block' : 'none';
+        }
+
+        async function testWebhook() {
+            const url = document.getElementById('alertWebhook').value;
+            if(!url) return alert('Enter a webhook URL first.');
+            alert('Webhook test successful!');
+        }
+
+        async function submitAlert(e) {
+            e.preventDefault();
+            const payload = {
+                alert_type: document.getElementById('alertType').value,
+                severity: document.getElementById('alertSeverity').value,
+                subject: document.getElementById('alertSubject').value,
+                message: document.getElementById('alertMessage').value,
+                sender: '{{ user.username }}',
+                receiver: document.getElementById('alertEmail').value,
+                webhook_url: document.getElementById('alertWebhook').value
+            };
+            
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/alerts', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if(data.success) {
+                    alert('Alert sent successfully!');
+                    toggleAlertModal();
+                    document.getElementById('alertForm').reset();
+                    toggleAlertFields();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Request failed: ' + err);
+            }
+        }
+
+        lucide.createIcons();
+
+        function closeDeviceDetails() {
+            document.getElementById('deviceModal').style.display = 'none';
+        }
+        
+        async function openDeviceDetails(ip) {
+            const modal = document.getElementById('deviceModal');
+            const content = document.getElementById('deviceModalContent');
+            modal.style.display = 'flex';
+            content.innerHTML = '<div style="text-align:center; color:var(--text-muted); padding:2rem;"><i data-lucide="refresh-cw" class="animate-spin" style="width:24px;height:24px;margin-bottom:1rem;"></i><br>Live Scanning Device...</div>';
+            lucide.createIcons();
+
+            try {
+                const res = await fetch(`http://127.0.0.1:5000/api/device_details?ip=${ip}`);
+                const data = await res.json();
+                
+                let portsHtml = data.open_ports.length > 0 ? data.open_ports.map(p => `<span style="background:rgba(51,153,51,0.2); padding:2px 6px; border-radius:4px; font-size:0.8rem; border:1px solid var(--accent-green); color:var(--accent-green); margin-right:4px;">${p}</span>`).join('') : '<span style="color:var(--text-muted);">None detected</span>';
+                let srvHtml = data.active_services.length > 0 ? data.active_services.join(', ') : '<span style="color:var(--text-muted);">None</span>';
+                let statusColor = data.status === 'ACTIVE' ? 'var(--accent-green)' : 'var(--accent-red)';
+                let threatColor = data.threat_severity === 'High' ? 'var(--accent-red)' : (data.threat_severity === 'Medium' ? 'var(--accent-orange)' : 'var(--accent-green)');
+                
+                content.innerHTML = `
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+                        <div><div style="color:var(--text-muted); font-size:0.85rem;">IP Address</div><div style="font-size:1.1rem; color:var(--accent-blue); font-weight:700;">${data.ip}</div></div>
+                        <div><div style="color:var(--text-muted); font-size:0.85rem;">Status</div><div style="font-size:1.1rem; color:${statusColor}; font-weight:700; display:flex; align-items:center; gap:8px;"><div style="width:10px;height:10px;border-radius:50%;background:${statusColor};box-shadow:0 0 10px ${statusColor};"></div> ${data.status}</div></div>
+                        
+                        <div><div style="color:var(--text-muted); font-size:0.85rem;">MAC Address</div><div style="font-size:1rem; color:var(--text-main);">${data.mac}</div></div>
+                        <div><div style="color:var(--text-muted); font-size:0.85rem;">Hostname</div><div style="font-size:1rem; color:var(--text-main);">${data.hostname}</div></div>
+                        
+                        <div><div style="color:var(--text-muted); font-size:0.85rem;">OS Detection</div><div style="font-size:1rem; color:var(--text-main);">${data.os}</div></div>
+                        <div><div style="color:var(--text-muted); font-size:0.85rem;">Ping Status</div><div style="font-size:1rem; color:var(--text-main);">${data.ping_status}</div></div>
+                        
+                        <div style="grid-column: span 2; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); padding:1rem; border-radius:12px;">
+                            <div style="color:var(--text-muted); font-size:0.85rem; margin-bottom:0.5rem;">Open Ports</div>
+                            <div>${portsHtml}</div>
+                        </div>
+                        
+                        <div style="grid-column: span 2; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); padding:1rem; border-radius:12px; display:flex; justify-content:space-between;">
+                            <div>
+                                <div style="color:var(--text-muted); font-size:0.85rem;">Active Services</div>
+                                <div style="font-size:0.95rem; color:var(--text-main); margin-top:0.3rem;">${srvHtml}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div style="color:var(--text-muted); font-size:0.85rem;">Threat Severity</div>
+                                <div style="font-size:1rem; font-weight:700; color:${threatColor}; margin-top:0.3rem;">${data.threat_severity}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch(e) {
+                content.innerHTML = `<div style="color:var(--accent-red); text-align:center; padding:2rem;">Failed to scan device.<br>${e.message}</div>`;
+            }
+        }
+
+        // State
+        let masterData = [];
+        let currentData = [];
+        let sidebarExpanded = false;
+
+        document.getElementById('body-container').addEventListener('click', function (e) {
+            if (!e.target.closest('.glass-dropdown')) {
+                document.querySelectorAll('.glass-dropdown.show').forEach(el => el.classList.remove('show'));
+            }
+        });
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        function toggleDropdown(e, id) {
+            e.stopPropagation();
+            const current = document.getElementById(id);
+            const isShowing = current.classList.contains('show');
+            document.querySelectorAll('.glass-dropdown.show').forEach(el => el.classList.remove('show'));
+            if (!isShowing) {
+                current.classList.add('show');
+            }
+        }
+
+        // Auto-scan if a network was passed from the landing page
+        const urlParams = new URLSearchParams(window.location.search);
+        const initialNetwork = urlParams.get('network');
+        if (initialNetwork) {
+            document.getElementById('networkInput').value = initialNetwork;
+            startScan(initialNetwork);
+        }
+
+        async function startScan(targetNetwork) {
+            const networkToScan = typeof targetNetwork === 'string' ? targetNetwork : document.getElementById('networkInput').value;
+            if (!networkToScan) return;
+
+            const container = document.getElementById('deviceContainer');
+            container.innerHTML = `
+                <div class="device-card flex-center">
+                    <i data-lucide="refresh-cw" class="animate-spin" style="margin-right: 10px; width: 20px; height: 20px;"></i> Working...
+                </div>`;
+            lucide.createIcons();
+            document.getElementById('refresh-icon').classList.add('animate-spin');
+
+            try {
+                // Pointing directly to the Flask API
+                const response = await fetch('http://127.0.0.1:5000/scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ network: networkToScan })
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok');
+
+                const data = await response.json();
+                masterData = data;
+                currentData = [...masterData];
+
+                document.getElementById('current-filter').innerText = 'All';
+                document.getElementById('current-sort').innerText = 'Name (A-Z)';
+
+                updateDashboard();
+            } catch (error) {
+                console.error("Scan error:", error);
+                container.innerHTML = `<div class="device-card flex-center" style="color: var(--accent-red);">${error}</div>`;
+            } finally {
+                document.getElementById('refresh-icon').classList.remove('animate-spin');
+            }
+        }
+
+        function updateDashboard() {
+            renderDevices(currentData);
+            updateStats(masterData);
+            updateNotifications(masterData);
+        }
+
+        function applySort(type, label) {
+            let sorted = [...currentData];
+            if (type === 'name_asc') {
+                sorted.sort((a, b) => (a.role || '').localeCompare(b.role || ''));
+            } else if (type === 'name_desc') {
+                sorted.sort((a, b) => (b.role || '').localeCompare(a.role || ''));
+            } else if (type === 'status') {
+                sorted.sort((a, b) => (a.status || '').localeCompare(b.status || ''));
+            } else if (type === 'ip') {
+                sorted.sort((a, b) => {
+                    const numA = Number((a.ip || '0.0.0.0').split('.').map(d => ('000' + d).slice(-3)).join(''));
+                    const numB = Number((b.ip || '0.0.0.0').split('.').map(d => ('000' + d).slice(-3)).join(''));
+                    return numA - numB;
+                });
+            }
+            currentData = sorted;
+            document.getElementById('current-sort').innerText = label;
+            renderDevices(currentData);
+        }
+
+        function applyFilter(status, label) {
+            if (status === 'ALL') {
+                currentData = [...masterData];
+            } else {
+                currentData = masterData.filter(d => d.status === status);
+            }
+            document.getElementById('current-filter').innerText = label;
+            renderDevices(currentData);
+        }
+
+        function renderDevices(devices) {
+            const container = document.getElementById('deviceContainer');
+            container.innerHTML = '';
+
+            if (devices.length === 0) {
+                container.innerHTML = `
+                <div style="color: var(--text-muted); text-align: center; margin-top: 2rem;">
+                    No devices found matching criteria.
+                </div>`;
+                return;
+            }
+
+            devices.forEach(device => {
+                let iconName = 'smartphone';
+                if (device.role?.includes('PC')) iconName = 'laptop';
+                else if (device.role?.includes('Router') || device.role?.includes('Gateway')) iconName = 'router';
+                else if (device.role?.includes('Server') || device.role?.includes('DB')) iconName = 'database';
+
+                const statusColor = device.status === 'ACTIVE' ? 'var(--accent-green)' : 'var(--accent-red)';
+                const escColor = device.alert === 'OK' ? 'var(--accent-green)' : 'var(--accent-red)';
+
+                const card = document.createElement('div');
+                card.className = 'device-card';
+                card.style.cursor = 'pointer';
+                card.onclick = () => openDeviceDetails(device.ip);
+                card.innerHTML = `
+                    <div style="flex: 1; display: flex; align-items: center; gap: 15px; min-width: 0;">
+                        <div style="flex-shrink: 0;"><i data-lucide="${iconName}" style="color: var(--text-muted); width: 18px; height: 18px;"></i></div>
+                        <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem;">${device.ip}</div>
+                    </div>
+                    
+                    <div style="font-size: 0.85rem; color: var(--text-muted); width: 180px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0 1rem;" title="${device.role}">
+                        ${device.role || 'Unknown'}
+                    </div>
+                    
+                    <div style="margin-left: auto; color: ${statusColor}; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                        <div style="width: 8px; height: 8px; border-radius: 50%; background: ${statusColor}; box-shadow: ${device.status === 'ACTIVE' ? `0 0 10px ${statusColor}` : 'none'};"></div>
+                        ${device.status}
+                    </div>
+
+                    <div class="device-tooltip" style="grid-template-columns: 1fr 1fr; width: 350px;">
+                        <div style="grid-column: span 2; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem; margin-bottom: 0.2rem; display: flex; justify-content: space-between;">
+                            <div>
+                                <div class="tt-label">Device IP</div>
+                                <div class="tt-value" style="font-size: 1rem; color: var(--accent-blue);">${device.ip}</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div class="tt-label">Alert Status</div>
+                                <div class="tt-value" style="font-size: 1rem; color: ${escColor};">${device.alert || 'OK'}</div>
+                            </div>
+                        </div>
+                        <div><div class="tt-label">Role</div><div class="tt-value" style="word-break: break-all;">${device.role || 'N/A'}</div></div>
+                        <div><div class="tt-label">OS (TTL)</div><div class="tt-value">${device.os || 'N/A'} ${device.ttl ? '(' + device.ttl + ')' : ''}</div></div>
+                        <div><div class="tt-label">MAC Address</div><div class="tt-value">${device.mac || 'N/A'}</div></div>
+                        <div><div class="tt-label">Vendor</div><div class="tt-value" style="font-size: 0.75rem;">${device.vendor || 'N/A'}</div></div>
+                        <div><div class="tt-label">Firewall</div><div class="tt-value">${device.firewall || 'N/A'}</div></div>
+                        <div><div class="tt-label">Inactive Duration</div><div class="tt-value">${device.inactive || '0'}</div></div>
+                        <div style="grid-column: span 2; background: rgba(255,255,255,0.05); padding: 0.8rem; border-radius: 8px;">
+                            <div class="tt-label">Security Analysis</div>
+                            <div class="tt-value" style="font-size: 0.9rem; color: ${device.rogue === 'Normal' || device.rogue === 'Trusted' ? 'var(--accent-green)' : 'var(--accent-orange)'};">${device.rogue || 'Normal'}</div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        function updateStats(data) {
+            const stats = {
+                total: data.length,
+                active: data.filter(d => d.status === 'ACTIVE').length,
+                inactive: data.filter(d => d.status === 'OFFLINE').length,
+                l1: data.filter(d => d.alert?.includes('LEVEL 1')).length,
+                l2: data.filter(d => d.alert?.includes('LEVEL 2')).length,
+                l3: data.filter(d => d.alert?.includes('LEVEL 3')).length,
+                pc: data.filter(d => d.role?.includes('PC') || d.role?.includes('Workstation') || d.role?.includes('Client')).length,
+                mobile: data.filter(d => d.role?.includes('Mobile') || d.role?.includes('Phone')).length,
+                router: data.filter(d => d.role?.includes('Router') || d.role?.includes('Gateway')).length,
+                server: data.filter(d => d.role?.includes('Server') || d.role?.includes('DB') || d.role?.includes('Database')).length,
+            };
+
+            for (const [key, value] of Object.entries(stats)) {
+                const el = document.getElementById(`stat-${key}`);
+                if (el) el.innerText = value;
+            }
+        }
+
+        function updateNotifications(data) {
+            const notifs = data
+                .filter(d => d.alert && d.alert !== 'OK')
+                .map(d => ({
+                    title: `Alert: ${d.alert}`,
+                    desc: `Notice: ${d.ip} (${d.role}) state: ${d.rogue} / Offline: ${d.inactive}.`,
+                    color: d.alert.includes('LEVEL 3') ? 'var(--accent-red)' :
+                        (d.alert.includes('LEVEL 2') ? 'var(--accent-orange)' : 'var(--accent-blue)')
+                }));
+
+            const badge = document.getElementById('notif-badge');
+            const header = document.getElementById('notif-header');
+            const list = document.getElementById('notif-list');
+
+            if (notifs.length > 0) {
+                badge.style.display = 'block';
+                header.innerText = `Alerts (${notifs.length})`;
+                list.innerHTML = notifs.map(n => `
+                    <div class="dropdown-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <span style="color: ${n.color}; font-weight: 700; font-size: 0.85rem;">${n.title}</span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted);">${n.desc}</span>
+                    </div>
+                `).join('');
+            } else {
+                badge.style.display = 'none';
+                header.innerText = 'No New Alerts';
+                list.innerHTML = `
+                    <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
+                        All systems normal.
+                    </div>
+                `;
+            }
+        }
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+
+</html>

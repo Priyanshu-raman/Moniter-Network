@@ -1,0 +1,274 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Monitor OS</title>
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .auth-container {
+            height: 100vh;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-deep);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .auth-container::before,
+        .auth-container::after {
+            content: '';
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            filter: blur(140px);
+            z-index: 0;
+            opacity: 0.15;
+            pointer-events: none;
+            animation: float 20s infinite alternate;
+        }
+
+        .auth-container::before {
+            background: var(--accent-green);
+            top: -200px;
+            right: -100px;
+        }
+
+        .auth-container::after {
+            background: var(--accent-blue);
+            bottom: -200px;
+            left: -100px;
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(60px, 60px);
+            }
+        }
+
+        .auth-card {
+            width: 100%;
+            max-width: 420px;
+            padding: 3rem;
+            text-align: center;
+            animation: fadeIn 0.8s ease-out;
+            z-index: 1;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auth-header {
+            margin-bottom: 2.5rem;
+        }
+
+        .logo-icon {
+            color: var(--accent-green);
+            margin-bottom: 1rem;
+            width: 48px;
+            height: 48px;
+        }
+
+        .auth-title {
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            letter-spacing: -1px;
+        }
+
+        .auth-subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+            padding-left: 0.5rem;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-wrapper .lucide {
+            position: absolute;
+            left: 1.2rem;
+            color: var(--text-muted);
+            pointer-events: none;
+            width: 18px;
+            height: 18px;
+        }
+
+        .auth-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            padding: 1rem 1.5rem 1rem 3.5rem;
+            border-radius: 12px;
+            color: white;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .auth-input:focus {
+            outline: none;
+            border-color: var(--accent-green);
+            background: rgba(51, 153, 51, 0.05);
+            box-shadow: 0 0 15px rgba(51, 153, 51, 0.1);
+        }
+
+        .auth-btn {
+            width: 100%;
+            background: var(--accent-green);
+            color: #0c1409;
+            border: none;
+            padding: 1rem;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 1.1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.8rem;
+            transition: all 0.2s ease;
+            margin-top: 1rem;
+        }
+
+        .auth-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(51, 153, 51, 0.3);
+            filter: brightness(1.1);
+        }
+
+        .error-box {
+            background: rgba(211, 74, 74, 0.1);
+            border: 1px solid rgba(211, 74, 74, 0.2);
+            color: #ff8080;
+            padding: 0.8rem;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .auth-footer {
+            margin-top: 2rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .auth-link {
+            color: var(--accent-green);
+            text-decoration: none;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .auth-link:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 480px) {
+            .auth-card {
+                padding: 2rem;
+                margin: 1rem;
+                border-radius: 20px;
+                max-width: calc(100% - 2rem);
+            }
+
+            .auth-title {
+                font-size: 1.6rem;
+            }
+
+            .auth-btn {
+                padding: 0.8rem;
+                font-size: 1rem;
+            }
+
+            .auth-input {
+                padding: 0.8rem 1.2rem 0.8rem 3rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="auth-container">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <i data-lucide="shield" class="logo-icon"></i>
+                <h1 class="auth-title">Welcome Back</h1>
+                <p class="auth-subtitle">Sign in to monitor your network</p>
+            </div>
+
+            {% if form.errors %}
+            <div class="error-box">Invalid Username or Password.</div>
+            {% endif %}
+
+            <form method="POST">
+                {% csrf_token %}
+
+                {% for field in form %}
+                <div class="form-group">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    <div class="input-wrapper">
+                        <i data-lucide="{% if 'password' in field.name %}lock{% else %}user{% endif %}"></i>
+                        {{ field }}
+                    </div>
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="auth-btn">
+                    Sign In <i data-lucide="arrow-right" style="width: 20px; height: 20px;"></i>
+                </button>
+            </form>
+            <script>
+                // Add required classes and placeholders to Django generated inputs
+                document.querySelectorAll('.input-wrapper input').forEach(input => {
+                    input.classList.add('auth-input');
+                    if (input.type === 'password') input.placeholder = '••••••••';
+                    else input.placeholder = 'Enter ' + input.name;
+                });
+            </script>
+
+            <div class="auth-footer">
+                Don't have an account?
+                <a href="{% url 'signup' %}" class="auth-link">Create one</a>
+            </div>
+        </div>
+    </div>
+    <script>lucide.createIcons();</script>
+</body>
+
+</html>

@@ -1,0 +1,436 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Logs — Monitor OS</title>
+    <meta name="description" content="Centralized audit trail of all authentication events including logins, logouts, and failed attempts.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .logs-page {
+            display: flex;
+            width: 100%;
+            min-height: 100vh;
+            background: var(--bg-deep);
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        .logs-page::before {
+            content: '';
+            position: absolute;
+            width: 700px; height: 700px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(239,68,68,0.18) 0%, rgba(51,153,51,0.08) 60%, transparent 100%);
+            filter: blur(100px);
+            top: -200px; right: -200px;
+            pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px;
+            height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            z-index: 100;
+            padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden;
+            transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap;
+            text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(51,153,51,0.3); }
+        .sidebar-btn.active { background: rgba(239,68,68,0.1); border-color: var(--accent-red); color: var(--accent-red); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-red); color: var(--accent-red); }
+
+        /* ── Main content ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 4rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; max-width: 1200px;
+        }
+
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-red); }
+
+        /* ── Summary cards ── */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.25rem;
+        }
+        .summary-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 1.5rem;
+            box-shadow: var(--glass-shadow);
+            display: flex; flex-direction: column; gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+        .summary-card:hover { border-color: var(--accent-green); transform: translateY(-2px); box-shadow: 0 12px 35px rgba(0,0,0,0.4); }
+        .summary-card .card-icon { color: var(--accent-green); }
+        .summary-card .card-num { font-size: 2rem; font-weight: 800; color: var(--text-main); }
+        .summary-card .card-desc { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); }
+
+        /* ── Filters bar ── */
+        .filter-bar {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 1.25rem 1.75rem;
+            box-shadow: var(--glass-shadow);
+            display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+        }
+        .search-input {
+            flex: 1; min-width: 200px;
+            background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 0.7rem 1.1rem;
+            color: var(--text-main); font-size: 0.9rem;
+            transition: all 0.15s ease; font-family: inherit;
+        }
+        .search-input:focus { outline: none; border-color: var(--accent-green); background: rgba(51,153,51,0.05); box-shadow: 0 0 20px rgba(51,153,51,0.1); }
+        .filter-select {
+            background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 0.7rem 1.1rem;
+            color: var(--text-main); font-size: 0.9rem;
+            cursor: pointer; transition: all 0.15s ease; font-family: inherit;
+        }
+        .filter-select:focus { outline: none; border-color: var(--accent-green); }
+        .btn-search {
+            background: rgba(51,153,51,0.12); border: 1px solid rgba(51,153,51,0.4);
+            color: var(--accent-green); border-radius: 12px;
+            padding: 0.7rem 1.3rem; font-size: 0.88rem; font-weight: 600;
+            cursor: pointer; transition: all 0.15s ease; display: flex; align-items: center; gap: 6px;
+            font-family: inherit;
+        }
+        .btn-search:hover { background: rgba(51,153,51,0.22); }
+
+        /* ── Log table ── */
+        .log-section {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px; padding: 2rem 2.5rem;
+            box-shadow: var(--glass-shadow);
+        }
+        .section-header {
+            font-size: 0.85rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 1.5px;
+            color: var(--accent-red); border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem; margin-bottom: 1.5rem;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .log-table { width: 100%; border-collapse: collapse; }
+        .log-table th {
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px;
+            color: var(--text-muted); padding: 0.6rem 0.9rem; text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .log-table td {
+            padding: 0.9rem 0.9rem; font-size: 0.88rem; color: var(--text-main);
+            border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle;
+        }
+        .log-table tr:last-child td { border-bottom: none; }
+        .log-table tr:hover td { background: rgba(239,68,68,0.03); }
+
+        .event-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0.3rem 0.75rem; border-radius: 8px;
+            font-size: 0.72rem; font-weight: 700; border: 1px solid;
+            white-space: nowrap;
+        }
+        .badge-login { background: rgba(51,153,51,0.12); border-color: var(--accent-green); color: var(--accent-green); }
+        .badge-logout { background: rgba(239,68,68,0.1); border-color: var(--accent-red); color: var(--accent-red); }
+        .badge-failed { background: rgba(245,158,11,0.12); border-color: var(--accent-orange); color: var(--accent-orange); }
+
+        /* ── Pagination ── */
+        .pagination {
+            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+            margin-top: 1.5rem; flex-wrap: wrap;
+        }
+        .page-btn {
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); padding: 0.5rem 0.9rem; border-radius: 10px;
+            font-size: 0.85rem; text-decoration: none; cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .page-btn:hover, .page-btn.current { background: rgba(51,153,51,0.12); border-color: var(--accent-green); color: var(--accent-green); }
+        .page-btn.disabled { opacity: 0.35; pointer-events: none; }
+        .page-ellipsis { color: var(--text-muted); padding: 0.5rem; }
+
+        /* empty state */
+        .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 0.9rem; }
+
+        @media (max-width: 900px) {
+            .summary-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+
+<body class="logs-page">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'security_logs' %}">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="main-wrapper">
+        <div class="page-title">
+            <i data-lucide="shield-alert" style="width:28px;height:28px;"></i>
+            Security Logs
+            <span style="font-size:0.9rem;font-weight:400;color:var(--text-muted);margin-left:0.5rem;">— Audit Trail</span>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="summary-grid">
+            <!-- We pass total_count from the view for the currently filtered set -->
+            <div class="summary-card">
+                <i data-lucide="activity" class="card-icon" style="width:22px;height:22px;"></i>
+                <div class="card-num">{{ total_count }}</div>
+                <div class="card-desc">Matching Events</div>
+            </div>
+            <div class="summary-card">
+                <i data-lucide="log-in" class="card-icon" style="width:22px;height:22px;color:var(--accent-green);"></i>
+                <div class="card-num" style="color:var(--accent-green);">
+                    {% with page_obj.paginator.object_list as all_logs %}
+                    {{ all_logs|length }}
+                    {% endwith %}
+                    —
+                </div>
+                <div class="card-desc">See filter for counts</div>
+            </div>
+            <div class="summary-card">
+                <i data-lucide="shield-alert" class="card-icon" style="width:22px;height:22px;color:var(--accent-orange);"></i>
+                <div class="card-num" style="color:var(--accent-orange);">
+                    {% if event_filter == 'FAILED' %}{{ total_count }}{% else %}—{% endif %}
+                </div>
+                <div class="card-desc">Failed Attempts Shown</div>
+            </div>
+            <div class="summary-card">
+                <i data-lucide="users" class="card-icon" style="width:22px;height:22px;color:var(--accent-blue);"></i>
+                <div class="card-num" style="font-size:1rem;color:var(--accent-blue);">{{ username }}</div>
+                <div class="card-desc">Viewing as</div>
+            </div>
+        </div>
+
+        <!-- Filter bar -->
+        <form method="get" action="{% url 'security_logs' %}" class="filter-bar">
+            <i data-lucide="search" style="width:18px;height:18px;color:var(--text-muted);flex-shrink:0;"></i>
+            <input
+                id="log-search"
+                class="search-input"
+                type="text"
+                name="q"
+                value="{{ q }}"
+                placeholder="Search by username, IP address…"
+                autocomplete="off">
+            <select class="filter-select" name="event" id="event-filter">
+                <option value="ALL"    {% if event_filter == 'ALL' %}selected{% endif %}>All Events</option>
+                <option value="LOGIN"  {% if event_filter == 'LOGIN' %}selected{% endif %}>Logins Only</option>
+                <option value="LOGOUT" {% if event_filter == 'LOGOUT' %}selected{% endif %}>Logouts Only</option>
+                <option value="FAILED" {% if event_filter == 'FAILED' %}selected{% endif %}>Failed Attempts</option>
+            </select>
+            <button type="submit" class="btn-search">
+                <i data-lucide="filter" style="width:15px;height:15px;"></i>
+                Apply
+            </button>
+            {% if q or event_filter != 'ALL' %}
+            <a href="{% url 'security_logs' %}" class="btn-search" style="background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.4);color:var(--accent-red);">
+                <i data-lucide="x" style="width:15px;height:15px;"></i>
+                Clear
+            </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+            {% endif %}
+        </form>
+
+        <!-- Logs table -->
+        <div class="log-section">
+            <div class="section-header">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <i data-lucide="list" style="width:16px;height:16px;"></i>
+                    Audit Events
+                </div>
+                <span style="color:var(--text-muted);font-size:0.8rem;font-weight:400;letter-spacing:0;text-transform:none;">
+                    Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} &nbsp;·&nbsp; {{ total_count }} total
+                </span>
+            </div>
+
+            {% if page_obj.object_list %}
+            <table class="log-table">
+                <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>User</th>
+                        <th>Date &amp; Time</th>
+                        <th>IP Address</th>
+                        <th>User Agent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in page_obj %}
+                    <tr>
+                        <td>
+                            {% if log.event == 'LOGIN' %}
+                            <span class="event-badge badge-login">
+                                <i data-lucide="log-in" style="width:12px;height:12px;"></i> Login
+                            </span>
+                            {% elif log.event == 'LOGOUT' %}
+                            <span class="event-badge badge-logout">
+                                <i data-lucide="log-out" style="width:12px;height:12px;"></i> Logout
+                            </span>
+                            {% else %}
+                            <span class="event-badge badge-failed">
+                                <i data-lucide="shield-x" style="width:12px;height:12px;"></i> Failed
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td style="font-weight:600;">
+                            {% if log.user %}{{ log.user.username }}{% else %}<span style="color:var(--accent-orange);">{{ log.username_attempt|default:"(unknown)" }}</span>{% endif %}
+                        </td>
+                        <td style="color:var(--text-muted);">
+                            {{ log.timestamp|date:"d M Y" }}
+                            <span style="color:var(--accent-green);margin-left:6px;">{{ log.timestamp|time:"H:i:s" }}</span>
+                        </td>
+                        <td style="font-family:monospace;font-size:0.82rem;color:var(--text-muted);">
+                            {{ log.ip_address|default:"—" }}
+                        </td>
+                        <td style="color:var(--text-muted);font-size:0.76rem;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                            title="{{ log.user_agent }}">
+                            {{ log.user_agent|truncatechars:70 }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="empty-state">
+                <i data-lucide="inbox" style="width:40px;height:40px;opacity:0.3;display:block;margin:0 auto 1rem;"></i>
+                No events match your filters.
+            </div>
+            {% endif %}
+
+            <!-- Pagination -->
+            {% if page_obj.paginator.num_pages > 1 %}
+            <div class="pagination">
+                {% if page_obj.has_previous %}
+                <a class="page-btn" href="?q={{ q }}&event={{ event_filter }}&page={{ page_obj.previous_page_number }}">← Prev</a>
+                {% else %}
+                <span class="page-btn disabled">← Prev</span>
+                {% endif %}
+
+                {% for i in page_obj.paginator.page_range %}
+                    {% if forloop.counter <= 3 or forloop.revcounter <= 2 or page_obj.number == i %}
+                    <a class="page-btn {% if page_obj.number == i %}current{% endif %}"
+                       href="?q={{ q }}&event={{ event_filter }}&page={{ i }}">{{ i }}</a>
+                    {% elif forloop.counter == 4 and page_obj.number > 5 %}
+                    <span class="page-ellipsis">…</span>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                <a class="page-btn" href="?q={{ q }}&event={{ event_filter }}&page={{ page_obj.next_page_number }}">Next →</a>
+                {% else %}
+                <span class="page-btn disabled">Next →</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+    </script>
+</body>
+</html>

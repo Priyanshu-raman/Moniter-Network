@@ -395,6 +395,10 @@
             <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Dashboard</span>
         </a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
         <a class="sidebar-btn active" href="{% url 'account' %}">
             <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>My Account</span>
@@ -407,14 +411,26 @@
             <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Security Logs</span>
         </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
         <a class="sidebar-btn" href="{% url 'broadcast' %}">
             <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Broadcast</span>
         </a>
+        <a class="sidebar-btn" href="{% url 'vulnerability_list' %}">
+            <i data-lucide="shield-x" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Vulnerabilities</span>
+        </a>
         <a class="sidebar-btn" href="{% url 'settings' %}">
-            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <i data-lucide="settings" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Settings</span>
         </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
 
         <div style="margin-top:auto;">
             <a href="{% url 'logout' %}" class="sidebar-btn">
@@ -502,10 +518,6 @@
                 <i data-lucide="external-link" style="width:15px;height:15px;"></i>
                 Open Security Logs
             </a>
-        <a class="sidebar-btn" href="{% url 'broadcast' %}">
-            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
-            <span>Broadcast</span>
-        </a>
         </div>
     </div>
 

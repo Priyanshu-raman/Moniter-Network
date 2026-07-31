@@ -1,0 +1,481 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if is_edit %}Edit Asset{% else %}Add Asset{% endif %} — Monitor OS</title>
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .asset-form-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .asset-form-page::before {
+            content: ''; position: absolute;
+            width: 700px; height: 700px; border-radius: 50%;
+            background: var(--accent-blue); filter: blur(140px); opacity: 0.05;
+            top: -200px; right: -200px; pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(74,144,226,0.3); }
+        .sidebar-btn.active { background: rgba(74,144,226,0.12); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        /* ── Main layout ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 5rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; width: 100%; max-width: 1000px;
+        }
+        .page-header {
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-blue); }
+
+        /* ── Section Cards ── */
+        .form-section {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); border-radius: 20px;
+            box-shadow: var(--glass-shadow); margin-bottom: 2rem; overflow: hidden;
+        }
+        .section-header {
+            padding: 1.25rem 1.75rem; border-bottom: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.01);
+        }
+        .section-title {
+            font-size: 0.82rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.2px; color: var(--accent-blue);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .section-body { padding: 1.75rem; }
+
+        /* ── Form styling ── */
+        .form-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.full { grid-column: span 2; }
+        
+        .form-label {
+            font-size: 0.76rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.8px; color: var(--text-muted);
+        }
+        .form-error {
+            font-size: 0.78rem; color: var(--accent-red); margin-top: 0.2rem;
+            display: flex; align-items: center; gap: 4px;
+        }
+
+        /* Inputs */
+        .settings-input, .settings-select {
+            width: 100%; background: rgba(0,0,0,0.25);
+            border: 1px solid var(--glass-border); border-radius: 10px;
+            padding: 0.7rem 1rem; color: var(--text-main);
+            font-size: 0.9rem; font-family: 'Inter', sans-serif;
+            transition: all 0.15s ease; outline: none;
+        }
+        .settings-input:focus, .settings-select:focus {
+            border-color: var(--accent-blue);
+            background: rgba(74,144,226,0.04);
+            box-shadow: 0 0 0 3px rgba(74,144,226,0.12);
+        }
+        .settings-select {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center;
+            padding-right: 2.5rem; cursor: pointer;
+            -webkit-appearance: none; appearance: none;
+        }
+        .settings-select option { background: #11151c; color: var(--text-main); }
+
+        /* ── Action buttons ── */
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.8rem 1.8rem; border-radius: 12px;
+            background: rgba(74,144,226,0.12); border: 1px solid rgba(74,144,226,0.4);
+            color: var(--accent-blue); font-weight: 700; font-size: 0.92rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-primary:hover { background: rgba(74,144,226,0.22); border-color: var(--accent-blue); }
+        
+        .btn-secondary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.8rem 1.8rem; border-radius: 12px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-muted); font-weight: 600; font-size: 0.92rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-secondary:hover { border-color: var(--accent-red); color: var(--accent-red); background: rgba(239,68,68,0.03); }
+
+        @media (max-width: 680px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .form-group.full { grid-column: span 1; }
+            .main-wrapper { padding: 1.5rem 1rem 4rem; }
+            .section-body { padding: 1.25rem; }
+        }
+    </style>
+</head>
+
+<body class="asset-form-page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}" id="nav-dashboard">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'asset_list' %}" id="nav-assets">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" id="nav-account">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}" id="nav-map">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}" id="nav-logs">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'vulnerability_list' %}">
+            <i data-lucide="shield-x" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Vulnerabilities</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}" id="nav-settings">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <header class="page-header">
+            <div class="page-title">
+                <i data-lucide="{% if is_edit %}pencil{% else %}plus-circle{% endif %}" style="width:28px;height:28px;"></i>
+                {% if is_edit %}Edit Asset: {{ asset.asset_name }}{% else %}Register New Asset{% endif %}
+            </div>
+        </header>
+
+        <form method="POST" style="display:flex; flex-direction:column; gap:0.5rem;">
+            {% csrf_token %}
+
+            <!-- Non-field error displays if any -->
+            {% if form.non_field_errors %}
+            <div style="background:rgba(239,68,68,0.1); border:1px solid var(--accent-red); border-radius:12px; padding:1rem; color:var(--accent-red); margin-bottom:1.5rem; font-size:0.88rem;">
+                {% for err in form.non_field_errors %}
+                <div style="display:flex; align-items:center; gap:8px;"><i data-lucide="alert-circle" style="width:16px;height:16px;"></i> {{ err }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- CARD 1: Basic Information -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i data-lucide="info" style="width:16px;height:16px;"></i>
+                        Basic Information
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="id_asset_name">Asset Name *</label>
+                            {{ form.asset_name }}
+                            {% for err in form.asset_name.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_asset_type">Asset Type *</label>
+                            {{ form.asset_type }}
+                            {% for err in form.asset_type.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group full">
+                            <label class="form-label" for="id_description">Description</label>
+                            {{ form.description }}
+                            {% for err in form.description.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD 2: Ownership Information -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i data-lucide="user-check" style="width:16px;height:16px;"></i>
+                        Ownership Information
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="id_owner_name">Owner Name *</label>
+                            {{ form.owner_name }}
+                            {% for err in form.owner_name.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_owner_email">Owner Email *</label>
+                            {{ form.owner_email }}
+                            {% for err in form.owner_email.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group full">
+                            <label class="form-label" for="id_owner_contact">Contact Number</label>
+                            {{ form.owner_contact }}
+                            {% for err in form.owner_contact.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD 3: Business Information -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i data-lucide="briefcase" style="width:16px;height:16px;"></i>
+                        Business Information
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="id_department">Department *</label>
+                            {{ form.department }}
+                            {% for err in form.department.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_location">Location *</label>
+                            {{ form.location }}
+                            {% for err in form.location.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_business_unit">Business Unit *</label>
+                            {{ form.business_unit }}
+                            {% for err in form.business_unit.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_criticality">Business Criticality *</label>
+                            {{ form.criticality }}
+                            {% for err in form.criticality.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD 4: Technical Information -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i data-lucide="cpu" style="width:16px;height:16px;"></i>
+                        Technical Information
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="id_ip_address">IP Address</label>
+                            {{ form.ip_address }}
+                            {% for err in form.ip_address.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_mac_address">MAC Address</label>
+                            {{ form.mac_address }}
+                            {% for err in form.mac_address.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_operating_system">Operating System</label>
+                            {{ form.operating_system }}
+                            {% for err in form.operating_system.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_vendor">Device Vendor</label>
+                            {{ form.vendor }}
+                            {% for err in form.vendor.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_model">Device Model</label>
+                            {{ form.model }}
+                            {% for err in form.model.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_serial_number">Serial Number</label>
+                            {{ form.serial_number }}
+                            {% for err in form.serial_number.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CARD 5: Additional Information -->
+            <div class="form-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i data-lucide="calendar" style="width:16px;height:16px;"></i>
+                        Additional Information
+                    </div>
+                </div>
+                <div class="section-body">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label" for="id_purchase_date">Purchase Date</label>
+                            {{ form.purchase_date }}
+                            {% for err in form.purchase_date.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_warranty_expiry">Warranty Expiry / Expiration Date</label>
+                            {{ form.warranty_expiry }}
+                            {% for err in form.warranty_expiry.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="id_status">Asset Status *</label>
+                            {{ form.status }}
+                            {% for err in form.status.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                        <div class="form-group full">
+                            <label class="form-label" for="id_notes">Notes</label>
+                            {{ form.notes }}
+                            {% for err in form.notes.errors %}
+                            <span class="form-error"><i data-lucide="alert-circle" style="width:12px;height:12px;"></i> {{ err }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit and Cancel buttons -->
+            <div style="display:flex; justify-content:flex-end; gap:1.25rem; margin-top:1rem; padding-top:1.5rem; border-top:1px solid var(--glass-border);">
+                <a href="{% if is_edit %}{% url 'asset_detail' asset.pk %}{% else %}{% url 'asset_list' %}{% endif %}" class="btn-secondary">
+                    Cancel
+                </a>
+                <button type="submit" class="btn-primary">
+                    <i data-lucide="save" style="width:18px;height:18px;"></i>
+                    {% if is_edit %}Save Changes{% else %}Register Asset{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // ── Sidebar toggle ───────────────────────────────────────────
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title   = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity    = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+    </script>
+</body>
+</html>

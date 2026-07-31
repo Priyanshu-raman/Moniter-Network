@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" width="200" height="80">
+  <!-- Subtle globe / network background -->
+  <g opacity="0.3">
+    <ellipse cx="100" cy="40" rx="60" ry="25" fill="none" stroke="#a0b0c0" stroke-width="1.5"/>
+    <ellipse cx="100" cy="40" rx="30" ry="25" fill="none" stroke="#a0b0c0" stroke-width="1.5"/>
+    <path d="M 40,40 L 160,40" stroke="#a0b0c0" stroke-width="1.5"/>
+    <path d="M 100,15 L 100,65" stroke="#a0b0c0" stroke-width="1.5"/>
+  </g>
+  <!-- Main text: srida -->
+  <text x="30" y="45" font-family="'Space Grotesk', 'Segoe UI', sans-serif" font-size="38" font-weight="800" fill="#0b2447" letter-spacing="1">srida</text>
+  <!-- Subtext: your IT -->
+  <text x="110" y="65" font-family="'Space Grotesk', 'Segoe UI', sans-serif" font-size="16" font-weight="600" fill="#d91a2a">your IT</text>
+</svg>

@@ -1,0 +1,79 @@
+{
+  "network": {
+    "default_ip_range": "192.168.1.0/24",
+    "gateway_ip": "192.168.1.1",
+    "scan_interval": "60",
+    "device_discovery_settings": {
+      "scapy_enabled": true,
+      "ping_sweep_enabled": true,
+      "arp_table_enabled": true
+    }
+  },
+  "thresholds": {
+    "cpu_alert_threshold": 90,
+    "memory_alert_threshold": 85,
+    "disk_usage_threshold": 90,
+    "network_utilization_threshold": 80
+  },
+  "alerts": {
+    "discord_webhook_url": "",
+    "slack_webhook_url": "",
+    "teams_webhook_url": "",
+    "email_sender": "priyanshupri25@gmail.com",
+    "email_password": "kygfclwiebnaxpqn",
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "email_recipients": {
+      "level_1_email": "priyanshupri25@gmail.com",
+      "level_2_email": "priyanshupri25@gmail.com",
+      "level_3_email": "priyanshupri25@gmail.com"
+    },
+    "alert_severity_levels": {
+      "level_1_seconds": 1800,
+      "level_2_seconds": 7200,
+      "level_3_seconds": 21600
+    }
+  },
+  "monitoring": {
+    "auto_scan_enabled": true,
+    "scan_frequency": 60,
+    "asset_discovery_settings": {
+      "active_subnet_only": true
+    },
+    "risk_scoring_parameters": {
+      "high_threat_ports": [
+        "23",
+        "21"
+      ],
+      "medium_threat_ports": [
+        "22",
+        "3389"
+      ]
+    }
+  },
+  "dashboard": {
+    "refresh_interval": 30,
+    "chart_settings": {
+      "theme": "cyberpunk"
+    },
+    "widget_visibility": {
+      "network_assets": true,
+      "all_devices": true,
+      "level_escalations": true
+    }
+  },
+  "security": {
+    "session_timeout": 3600,
+    "failed_login_limits": 5,
+    "password_policy_settings": {
+      "min_length": 8,
+      "require_special": true
+    }
+  },
+  "cooldowns": {
+    "low": 60,
+    "medium": 45,
+    "high": 30,
+    "critical": 15
+  }
+}

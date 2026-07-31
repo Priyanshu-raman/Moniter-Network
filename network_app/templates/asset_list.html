@@ -1,0 +1,598 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Inventory — Monitor OS</title>
+    <meta name="description" content="View and manage business assets and security criticality settings.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .assets-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .assets-page::before {
+            content: ''; position: absolute;
+            width: 700px; height: 700px; border-radius: 50%;
+            background: var(--accent-blue); filter: blur(140px); opacity: 0.05;
+            top: -200px; right: -200px; pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(74,144,226,0.3); }
+        .sidebar-btn.active { background: rgba(74,144,226,0.12); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        /* ── Main layout ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 5rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; width: 100%; max-width: 1300px;
+        }
+        .page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 1.5rem;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-blue); }
+
+        /* ── Toast / Messages ── */
+        .toast-container {
+            position: fixed; top: 2rem; right: 2rem; z-index: 9999;
+            display: flex; flex-direction: column; gap: 0.75rem;
+        }
+        .toast {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 1rem 1.5rem; border-radius: 14px;
+            font-size: 0.9rem; font-weight: 600; animation: slideIn 0.3s ease forwards;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); min-width: 280px;
+        }
+        .toast-success {
+            background: rgba(51,153,51,0.12); border: 1px solid rgba(51,153,51,0.4);
+            color: var(--accent-green);
+        }
+        .toast-error {
+            background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.35);
+            color: var(--accent-red);
+        }
+        @keyframes slideIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateY(-8px); } }
+
+        /* ── Filter bar ── */
+        .filters-panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); border-radius: 20px;
+            padding: 1.5rem; display: flex; flex-wrap: wrap; gap: 1rem;
+            align-items: center; justify-content: space-between;
+        }
+        .filters-group { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; flex: 1; }
+        .search-input {
+            background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            color: var(--text-main); padding: 0.6rem 1rem; border-radius: 10px;
+            font-size: 0.88rem; outline: none; width: 220px; transition: all 0.15s ease;
+        }
+        .search-input:focus { border-color: var(--accent-blue); background: rgba(74,144,226,0.05); }
+        .filter-select {
+            background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            color: var(--text-main); padding: 0.6rem 1.8rem 0.6rem 1rem; border-radius: 10px;
+            font-size: 0.88rem; outline: none; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 0.75rem center;
+            -webkit-appearance: none; appearance: none;
+        }
+        .filter-select option { background: #11151c; color: var(--text-main); }
+        .filter-select:focus { border-color: var(--accent-blue); }
+
+        /* ── Action Buttons ── */
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.7rem 1.4rem; border-radius: 12px;
+            background: rgba(74,144,226,0.12); border: 1px solid rgba(74,144,226,0.4);
+            color: var(--accent-blue); font-weight: 600; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-primary:hover { background: rgba(74,144,226,0.22); border-color: var(--accent-blue); box-shadow: 0 0 10px rgba(74,144,226,0.15); }
+        
+        .btn-secondary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.6rem 1.1rem; border-radius: 10px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); font-weight: 600; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-secondary:hover { background: var(--glass-bg-hover); border-color: var(--text-muted); }
+
+        .btn-table {
+            display: inline-flex; align-items: center; gap: 0.35rem;
+            padding: 0.4rem 0.8rem; border-radius: 8px;
+            font-size: 0.8rem; font-weight: 600; cursor: pointer;
+            transition: all 0.15s ease; text-decoration: none;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main);
+        }
+        .btn-table:hover { background: var(--glass-bg-hover); border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        .btn-table-danger {
+            background: rgba(239,68,68,0.06); border-color: rgba(239,68,68,0.25); color: var(--accent-red);
+        }
+        .btn-table-danger:hover { background: rgba(239,68,68,0.16); border-color: var(--accent-red); color: var(--accent-red); }
+
+        /* ── Inventory Table ── */
+        .table-container {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); border-radius: 24px;
+            box-shadow: var(--glass-shadow); overflow: hidden;
+        }
+        .assets-table { width: 100%; border-collapse: collapse; text-align: left; }
+        .assets-table th {
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1.2px;
+            color: var(--text-muted); padding: 1.2rem 1.5rem;
+            border-bottom: 1px solid var(--glass-border); font-weight: 700;
+        }
+        .assets-table td {
+            padding: 1.2rem 1.5rem; font-size: 0.88rem; color: var(--text-main);
+            border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle;
+        }
+        .assets-table tr:last-child td { border-bottom: none; }
+        .assets-table tr:hover td { background: rgba(74,144,226,0.02); }
+
+        /* ── Criticality & Status Badges ── */
+        .badge-crit {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 0.28rem 0.75rem; border-radius: 50px;
+            font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;
+        }
+        .badge-crit.critical { background: rgba(211,74,74,0.1); border: 1px solid rgba(211,74,74,0.3); color: var(--accent-red); box-shadow: 0 0 8px rgba(211,74,74,0.1); }
+        .badge-crit.high { background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.3); color: var(--accent-orange); }
+        .badge-crit.medium { background: rgba(255,235,59,0.06); border: 1px solid rgba(255,235,59,0.2); color: #e5c158; }
+        .badge-crit.low { background: rgba(51,153,51,0.1); border: 1px solid rgba(51,153,51,0.3); color: var(--accent-green); }
+
+        .status-pill {
+            font-size: 0.8rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .status-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+        }
+
+        /* ── Empty State ── */
+        .empty-state {
+            text-align: center; padding: 5rem 2rem;
+            color: var(--text-muted); font-size: 0.95rem;
+            display: flex; flex-direction: column; align-items: center; gap: 1rem;
+        }
+        .empty-state i { color: rgba(74,144,226,0.2); }
+
+        /* ── Pagination ── */
+        .pagination-container {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1.2rem 1.5rem; border-top: 1px solid var(--glass-border);
+            font-size: 0.82rem; color: var(--text-muted);
+        }
+        .pagination-links { display: flex; gap: 0.5rem; }
+        .page-link {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; border-radius: 8px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); font-weight: 600; text-decoration: none;
+            transition: all 0.15s ease;
+        }
+        .page-link:hover, .page-link.active {
+            border-color: var(--accent-blue); background: rgba(74,144,226,0.1); color: var(--accent-blue);
+        }
+        .page-link.disabled {
+            opacity: 0.4; pointer-events: none;
+        }
+
+        /* ── Modal overlay ── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(6px); z-index: 9000;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-box {
+            background: #111923; border: 1px solid var(--glass-border);
+            border-radius: 24px; padding: 2.2rem; width: 100%; max-width: 440px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+            transform: translateY(20px); transition: transform 0.2s ease;
+        }
+        .modal-overlay.active .modal-box { transform: translateY(0); }
+        .modal-title {
+            font-size: 1.15rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+        }
+
+        @media (max-width: 900px) {
+            .filters-panel { flex-direction: column; align-items: stretch; }
+            .filters-group { flex-direction: column; align-items: stretch; }
+            .search-input { width: 100%; }
+            .filter-select { width: 100%; }
+        }
+    </style>
+</head>
+
+<body class="assets-page">
+
+    <!-- Flash message toasts container -->
+    <div class="toast-container" id="toast-container">
+        {% if messages %}
+            {% for message in messages %}
+                <div class="toast {% if message.tags == 'success' %}toast-success{% else %}toast-error{% endif %}">
+                    <i data-lucide="{% if message.tags == 'success' %}check-circle-2{% else %}alert-circle{% endif %}" style="width:18px;height:18px;flex-shrink:0;"></i>
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}" id="nav-dashboard">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'asset_list' %}" id="nav-assets">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" id="nav-account">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}" id="nav-map">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}" id="nav-logs">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'vulnerability_list' %}">
+            <i data-lucide="shield-x" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Vulnerabilities</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}" id="nav-settings">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <header class="page-header">
+            <div class="page-title">
+                <i data-lucide="package" style="width:28px;height:28px;"></i>
+                Asset Inventory
+            </div>
+            <div style="display:flex; gap:0.75rem;">
+                <a href="{% url 'asset_export' %}?q={{ q }}&criticality={{ criticality_filter }}&asset_type={{ type_filter }}&status={{ status_filter }}&location={{ location_filter }}" class="btn-secondary">
+                    <i data-lucide="download" style="width:16px;height:16px;"></i> Export CSV
+                </a>
+                <a href="{% url 'asset_create' %}" class="btn-primary">
+                    <i data-lucide="plus-circle" style="width:16px;height:16px;"></i> Add New Asset
+                </a>
+            </div>
+        </header>
+
+        <!-- Filters Form -->
+        <form method="GET" action="{% url 'asset_list' %}" class="filters-panel" id="filters-form">
+            <div class="filters-group">
+                <input type="text" name="q" value="{{ q }}" placeholder="Search assets, owners, IPs..." class="search-input" onkeypress="if(event.key==='Enter') this.form.submit()">
+                
+                <!-- Criticality Filter -->
+                <select name="criticality" class="filter-select" onchange="this.form.submit()">
+                    <option value="">All Criticalities</option>
+                    <option value="Critical" {% if criticality_filter == 'Critical' %}selected{% endif %}>Critical 🔴</option>
+                    <option value="High" {% if criticality_filter == 'High' %}selected{% endif %}>High 🟠</option>
+                    <option value="Medium" {% if criticality_filter == 'Medium' %}selected{% endif %}>Medium 🟡</option>
+                    <option value="Low" {% if criticality_filter == 'Low' %}selected{% endif %}>Low 🟢</option>
+                </select>
+
+                <!-- Asset Type Filter -->
+                <select name="asset_type" class="filter-select" onchange="this.form.submit()">
+                    <option value="">All Types</option>
+                    {% for type in all_types %}
+                    <option value="{{ type }}" {% if type_filter == type %}selected{% endif %}>{{ type }}</option>
+                    {% endfor %}
+                </select>
+
+                <!-- Status Filter -->
+                <select name="status" class="filter-select" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    <option value="Active" {% if status_filter == 'Active' %}selected{% endif %}>Active</option>
+                    <option value="Inactive" {% if status_filter == 'Inactive' %}selected{% endif %}>Inactive</option>
+                    <option value="Maintenance" {% if status_filter == 'Maintenance' %}selected{% endif %}>Under Maintenance</option>
+                    <option value="Decommissioned" {% if status_filter == 'Decommissioned' %}selected{% endif %}>Decommissioned</option>
+                </select>
+
+                <!-- Location Filter -->
+                <select name="location" class="filter-select" onchange="this.form.submit()">
+                    <option value="">All Locations</option>
+                    {% for loc in all_locations %}
+                    <option value="{{ loc }}" {% if location_filter == loc %}selected{% endif %}>{{ loc }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Sorting Select -->
+            <select name="sort" class="filter-select" onchange="this.form.submit()" style="background-color:rgba(0,0,0,0.35); border-color:rgba(255,255,255,0.12);">
+                <option value="-created_at" {% if sort_by == '-created_at' %}selected{% endif %}>Recently Added</option>
+                <option value="asset_name" {% if sort_by == 'asset_name' %}selected{% endif %}>Name (A-Z)</option>
+                <option value="-asset_name" {% if sort_by == '-asset_name' %}selected{% endif %}>Name (Z-A)</option>
+                <option value="criticality" {% if sort_by == 'criticality' %}selected{% endif %}>Criticality (Asc)</option>
+                <option value="-criticality" {% if sort_by == '-criticality' %}selected{% endif %}>Criticality (Desc)</option>
+                <option value="owner_name" {% if sort_by == 'owner_name' %}selected{% endif %}>Owner (A-Z)</option>
+            </select>
+        </form>
+
+        <!-- Table Panel -->
+        <div class="table-container">
+            {% if page_obj %}
+            <table class="assets-table">
+                <thead>
+                    <tr>
+                        <th>Asset Name</th>
+                        <th>Type</th>
+                        <th>Owner</th>
+                        <th>Criticality</th>
+                        <th>Department</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                        <th style="text-align:right; padding-right:2rem;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for asset in page_obj %}
+                    <tr>
+                        <td>
+                            <div style="font-weight:700; color:var(--text-main);">{{ asset.asset_name }}</div>
+                            <div style="font-size:0.75rem; color:var(--text-muted); font-family:monospace; margin-top:2px;">
+                                {% if asset.ip_address %}{{ asset.ip_address }}{% else %}No IP{% endif %}
+                            </div>
+                        </td>
+                        <td><span style="font-weight:500; color:var(--text-muted);">{{ asset.asset_type }}</span></td>
+                        <td>
+                            <div>{{ asset.owner_name }}</div>
+                            <div style="font-size:0.72rem; color:var(--text-muted);">{{ asset.owner_email }}</div>
+                        </td>
+                        <td>
+                            {% if asset.criticality == 'Critical' %}
+                                <span class="badge-crit critical"><i data-lucide="shield-alert" style="width:12px;height:12px;"></i> Critical</span>
+                            {% elif asset.criticality == 'High' %}
+                                <span class="badge-crit high"><i data-lucide="shield" style="width:12px;height:12px;"></i> High</span>
+                            {% elif asset.criticality == 'Medium' %}
+                                <span class="badge-crit medium"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Medium</span>
+                            {% else %}
+                                <span class="badge-crit low"><i data-lucide="check" style="width:12px;height:12px;"></i> Low</span>
+                            {% endif %}
+                        </td>
+                        <td style="color:var(--text-muted);">{{ asset.department }}</td>
+                        <td style="color:var(--text-muted);">{{ asset.location }}</td>
+                        <td>
+                            {% if asset.status == 'Active' %}
+                                <span class="status-pill" style="color:var(--accent-green);">
+                                    <span class="status-dot" style="background:var(--accent-green); box-shadow:0 0 6px var(--accent-green);"></span> Active
+                                </span>
+                            {% elif asset.status == 'Inactive' %}
+                                <span class="status-pill" style="color:var(--accent-red);">
+                                    <span class="status-dot" style="background:var(--accent-red);"></span> Inactive
+                                </span>
+                            {% elif asset.status == 'Maintenance' %}
+                                <span class="status-pill" style="color:var(--accent-orange);">
+                                    <span class="status-dot" style="background:var(--accent-orange);"></span> Maintenance
+                                </span>
+                            {% else %}
+                                <span class="status-pill" style="color:var(--text-muted);">
+                                    <span class="status-dot" style="background:var(--text-muted);"></span> Decommissioned
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align:right; padding-right:2rem;">
+                            <div style="display:inline-flex; gap:0.5rem; justify-content:flex-end;">
+                                <a href="{% url 'asset_detail' asset.pk %}" class="btn-table" title="View Details">
+                                    <i data-lucide="eye" style="width:13px;height:13px;"></i>
+                                </a>
+                                {% if is_admin or asset.added_by == request.user %}
+                                <a href="{% url 'asset_edit' asset.pk %}" class="btn-table" title="Edit Asset">
+                                    <i data-lucide="pencil" style="width:13px;height:13px;"></i>
+                                </a>
+                                {% endif %}
+                                {% if is_admin %}
+                                <button type="button" class="btn-table btn-table-danger" title="Delete Asset" onclick="confirmDelete({{ asset.pk }}, '{{ asset.asset_name|escapejs }}')">
+                                    <i data-lucide="trash-2" style="width:13px;height:13px;"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Pagination Links -->
+            <div class="pagination-container">
+                <div>
+                    Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }} assets
+                </div>
+                <div class="pagination-links">
+                    {% if page_obj.has_previous %}
+                        <a href="?page=1&q={{ q }}&criticality={{ criticality_filter }}&asset_type={{ type_filter }}&status={{ status_filter }}&location={{ location_filter }}&sort={{ sort_by }}" class="page-link">&laquo;</a>
+                        <a href="?page={{ page_obj.previous_page_number }}&q={{ q }}&criticality={{ criticality_filter }}&asset_type={{ type_filter }}&status={{ status_filter }}&location={{ location_filter }}&sort={{ sort_by }}" class="page-link">&lsaquo;</a>
+                    {% else %}
+                        <span class="page-link disabled">&laquo;</span>
+                        <span class="page-link disabled">&lsaquo;</span>
+                    {% endif %}
+
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <span class="page-link active">{{ num }}</span>
+                        {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+                            <a href="?page={{ num }}&q={{ q }}&criticality={{ criticality_filter }}&asset_type={{ type_filter }}&status={{ status_filter }}&location={{ location_filter }}&sort={{ sort_by }}" class="page-link">{{ num }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}&q={{ q }}&criticality={{ criticality_filter }}&asset_type={{ type_filter }}&status={{ status_filter }}&location={{ location_filter }}&sort={{ sort_by }}" class="page-link">&rsaquo;</a>
+                        <a href="?page={{ page_obj.paginator.num_pages }}&q={{ q }}&criticality={{ criticality_filter }}&asset_type={{ type_filter }}&status={{ status_filter }}&location={{ location_filter }}&sort={{ sort_by }}" class="page-link">&raquo;</a>
+                    {% else %}
+                        <span class="page-link disabled">&rsaquo;</span>
+                        <span class="page-link disabled">&raquo;</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i data-lucide="package-search" style="width:48px;height:48px;"></i>
+                <span>No assets registered yet or none match your filters.</span>
+                <a href="{% url 'asset_create' %}" class="btn-primary" style="margin-top:0.5rem;">
+                    <i data-lucide="plus-circle" style="width:15px;height:15px;"></i> Add Your First Asset
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="delete-modal" onclick="handleOverlayClick(event)">
+        <div class="modal-box">
+            <div class="modal-title" style="color:var(--accent-red);">
+                <i data-lucide="alert-triangle" style="color:var(--accent-red);width:22px;height:22px;"></i>
+                Delete Asset
+            </div>
+            <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.5; margin-bottom:1.5rem;">
+                Are you sure you want to permanently delete the asset <strong id="delete-asset-name" style="color:var(--text-main);"></strong>? This action is irreversible.
+            </p>
+            <form method="POST" id="delete-form">
+                {% csrf_token %}
+                <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-table btn-table-danger" style="padding:0.6rem 1.4rem; font-size:0.88rem; border-radius:10px;">
+                        <i data-lucide="trash-2" style="width:15px;height:15px;"></i> Confirm Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // ── Sidebar toggle ───────────────────────────────────────────
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title   = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity    = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        // ── Modal Actions ────────────────────────────────────────────
+        function confirmDelete(pk, name) {
+            const modal = document.getElementById('delete-modal');
+            const nameEl = document.getElementById('delete-asset-name');
+            const form = document.getElementById('delete-form');
+            
+            nameEl.textContent = name;
+            form.action = `/assets/${pk}/delete/`;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('delete-modal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function handleOverlayClick(e) {
+            if (e.target === document.getElementById('delete-modal')) closeModal();
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // ── Auto-dismiss flash toast after 5s ────────────────────────
+        const toasts = document.querySelectorAll('.toast');
+        toasts.forEach(toast => {
+            setTimeout(() => {
+                toast.style.transition = 'opacity 0.5s ease';
+                toast.style.opacity    = '0';
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
+        });
+    </script>
+</body>
+</html>

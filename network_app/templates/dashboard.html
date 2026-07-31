@@ -487,6 +487,70 @@
             justify-content: center;
             flex-direction: row !important;
         }
+
+        /* ── Modern Toast Container ── */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 9999;
+        }
+
+        .toast-notification {
+            min-width: 320px;
+            max-width: 400px;
+            padding: 1.25rem;
+            background: rgba(17, 25, 35, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-left: 4px solid var(--accent-green);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            position: relative;
+        }
+
+        .toast-notification.error {
+            border-left-color: var(--accent-red);
+        }
+
+        .toast-notification.info {
+            border-left-color: var(--accent-blue);
+        }
+
+        .toast-notification.warning {
+            border-left-color: var(--accent-orange);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100px) translateY(0);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) translateY(0);
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+        }
     </style>
 </head>
 
@@ -507,6 +571,10 @@
             <i data-lucide="layout-dashboard" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Dashboard</span>
         </a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}">
+            <i data-lucide="package" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Assets</span>
+        </a>
         <a class="sidebar-btn" href="{% url 'network_map' %}">
             <i data-lucide="network" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Network Map</span>
@@ -515,14 +583,32 @@
             <i data-lucide="shield-alert" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Security Logs</span>
         </a>
+        <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts">
+            <i data-lucide="bell" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Alerts</span>
+        </a>
         <a class="sidebar-btn" href="{% url 'broadcast' %}">
             <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'incident_response' %}">
+            <i data-lucide="flame" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Incidents</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'vulnerability_list' %}">
+            <i data-lucide="shield-x" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Vulnerabilities</span>
         </a>
         <a class="sidebar-btn" href="{% url 'settings' %}">
             <i data-lucide="settings" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Settings</span>
         </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
 
         <div style="margin-top: auto;">
             <a href="{% url 'logout' %}" style="text-decoration: none;">
@@ -552,7 +638,7 @@
                 </button>
 
                 <div style="position: relative;">
-                    <button class="icon-btn" onclick="toggleDropdown(event, 'notif-dropdown')">
+                    <button class="icon-btn" onclick="handleNotificationBellClick(event)">
                         <div id="notif-badge" class="badge" style="display: none;"></div>
                         <i data-lucide="bell" style="width: 18px; height: 18px;"></i>
                     </button>
@@ -611,6 +697,10 @@
         <main class="dashboard-content">
             <div class="main-section">
                 <div class="filters">
+                    <div id="last-scan-container" style="font-size:0.85rem; color:var(--text-muted); display:flex; align-items:center; gap:6px; margin-right:auto; font-weight:500;">
+                        <i data-lucide="clock" style="width:14px;height:14px;color:var(--accent-green);"></i>
+                        <span id="last-scan-text">Checking scan history...</span>
+                    </div>
                     <div class="filter-wrapper">
                         <div class="filter-pill" onclick="toggleDropdown(event, 'sort-dropdown')">
                             <i data-lucide="sort-desc" style="width: 16px; height: 16px;"></i> <span
@@ -675,6 +765,61 @@
                     </div>
                 </div>
 
+                <!-- Alert Metrics Card -->
+                <div class="data-box glass-panel" id="alert-metrics-card">
+                    <div class="data-label">Alert Metrics</div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-red); box-shadow: 0 0 5px var(--accent-red);"></span>Active Alerts</div>
+                        <div class="stat-val" id="alert-metric-active">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green);"></span>Resolved Alerts</div>
+                        <div class="stat-val" id="alert-metric-resolved">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-orange); box-shadow: 0 0 5px var(--accent-orange);"></span>Suppressed Alerts</div>
+                        <div class="stat-val" id="alert-metric-suppressed">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-blue);"></span>Total Alerts</div>
+                        <div class="stat-val" id="alert-metric-total">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div>Avg. Resolution Time</div>
+                        <div class="stat-val" id="alert-metric-avg-time">0 min</div>
+                    </div>
+                </div>
+
+                <!-- Incident Summary Card -->
+                <div class="data-box glass-panel" id="incident-metrics-card" style="margin-top: 1rem;">
+                    <div class="data-label" style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>Incident Summary</span>
+                        <a href="{% url 'incident_response' %}" style="color: var(--accent-green); text-decoration: none; font-size: 0.75rem; display: flex; align-items: center; gap: 4px;">
+                            View All <i data-lucide="external-link" style="width: 12px; height: 12px;"></i>
+                        </a>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-red); box-shadow: 0 0 5px var(--accent-red);"></span>Active Incidents</div>
+                        <div class="stat-val" id="incident-metric-active">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: #ef4444;"></span>Open Critical</div>
+                        <div class="stat-val" style="color: #ef4444; font-weight: 700;" id="incident-metric-critical">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-green); box-shadow: 0 0 5px var(--accent-green);"></span>Resolved Incidents</div>
+                        <div class="stat-val" id="incident-metric-resolved">0</div>
+                    </div>
+                    <div class="stat-row">
+                        <div><span class="stat-dot" style="background: var(--accent-blue);"></span>SLA Compliance</div>
+                        <div class="stat-val" style="color: var(--accent-green);" id="incident-metric-sla">100%</div>
+                    </div>
+                    <div class="stat-row">
+                        <div>MTTR (Mean Time to Resolution)</div>
+                        <div class="stat-val" id="incident-metric-mttr">0 min</div>
+                    </div>
+                </div>
+
                 <div class="data-box glass-panel">
                     <div class="data-label">Network Assets (<span id="asset-total">0</span> active)</div>
                     <div class="stat-row">
@@ -710,6 +855,39 @@
                         <div class="stat-val" id="asset-databases">0</div>
                     </div>
                 </div>
+
+                <div class="data-box glass-panel">
+                    <div class="data-label">Asset Summary</div>
+                    <div class="stat-row">
+                        <div style="display:flex; align-items:center; gap:8px;">📦 Total Assets</div>
+                        <div class="stat-val" style="color: var(--accent-blue);">{{ total_assets }}</div>
+                    </div>
+                    <div class="stat-row">
+                        <div style="display:flex; align-items:center; gap:8px;">🔴 Critical Assets</div>
+                        <div class="stat-val" style="color: var(--accent-red); font-weight:700;">{{ critical_assets }}</div>
+                    </div>
+                    <div class="stat-row">
+                        <div style="display:flex; align-items:center; gap:8px;">🟠 High Risk Assets</div>
+                        <div class="stat-val" style="color: var(--accent-orange); font-weight:700;">{{ high_assets }}</div>
+                    </div>
+                    <div class="stat-row" style="margin-top: 1rem; border-top: 1px solid var(--glass-border); padding-top: 0.5rem; display:block;">
+                        <div style="font-size: 0.72rem; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 0.5px;">Recently Added</div>
+                        <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 0.5rem;">
+                            {% for asset in recent_assets %}
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                                <a href="{% url 'asset_detail' asset.pk %}" style="color: var(--text-main); text-decoration: none; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">
+                                    {{ asset.asset_name }}
+                                </a>
+                                <span style="font-size: 0.72rem; color: {% if asset.criticality == 'Critical' %}var(--accent-red){% elif asset.criticality == 'High' %}var(--accent-orange){% elif asset.criticality == 'Medium' %}#e5c158{% else %}var(--accent-green){% endif %}; font-weight: 700;">
+                                    {{ asset.criticality }}
+                                </span>
+                            </div>
+                            {% empty %}
+                            <div style="color: var(--text-muted); font-size: 0.78rem;">No assets registered.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
             </aside>
         </main>
     </div>
@@ -743,7 +921,7 @@
                     <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Webhook URL (Discord/Slack/Teams)</label>
                     <div style="display:flex; gap:0.5rem;">
                         <input type="url" id="alertWebhook" placeholder="https://..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;">
-                        <button type="button" onclick="testWebhook()" style="background:rgba(51,153,51,0.2); border:1px solid var(--accent-green); color:var(--accent-green); padding:0 1rem; border-radius:12px; cursor:pointer;">Test</button>
+                        <button type="button" onclick="testWebhook(this)" style="background:rgba(51,153,51,0.2); border:1px solid var(--accent-green); color:var(--accent-green); padding:0 1rem; border-radius:12px; cursor:pointer;">Test</button>
                     </div>
                 </div>
 
@@ -790,6 +968,32 @@
         </div>
     </div>
 
+    <!-- Fallback Manual Network Modal -->
+    <div id="fallbackModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+        <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:20px; padding:2rem; width:420px; max-width:90%; box-shadow:var(--glass-shadow); position:relative;">
+            <button onclick="closeFallbackModal()" style="position:absolute; top:1rem; right:1rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer;">
+                <i data-lucide="x" style="width:20px;height:20px;"></i>
+            </button>
+            <h2 style="margin-top:0; color:var(--text-main); font-size:1.4rem; display:flex; align-items:center; gap:0.5rem;">
+                <i data-lucide="alert-circle" style="color:var(--accent-orange);"></i> Network Detection Failed
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.9rem; margin-top:1rem; line-height:1.5;">
+                We could not automatically detect your active network adapter and subnet settings. Please enter your target network manually to start the scan.
+            </p>
+            
+            <form id="fallbackForm" style="display:flex; flex-direction:column; gap:1.2rem; margin-top:1.5rem;" onsubmit="submitFallbackScan(event)">
+                <div>
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Target Network Subnet</label>
+                    <input type="text" id="fallbackNetworkInput" placeholder="e.g. 192.168.1.0/24" required style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px; font-size:0.95rem;">
+                </div>
+                
+                <button type="submit" style="background:var(--accent-green); color:#fff; border:none; padding:0.8rem; border-radius:12px; font-weight:700; cursor:pointer; margin-top:0.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center;">
+                    <i data-lucide="play" style="width:16px;height:16px;"></i> Start Manual Scan
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script>
         function toggleAlertModal() {
             const modal = document.getElementById('alertModal');
@@ -806,10 +1010,42 @@
             document.getElementById('webhookField').style.display = (type === 'Webhook') ? 'block' : 'none';
         }
 
-        async function testWebhook() {
+        async function testWebhook(btn) {
             const url = document.getElementById('alertWebhook').value;
             if(!url) return alert('Enter a webhook URL first.');
-            alert('Webhook test successful!');
+            
+            const originalText = btn.innerText;
+            btn.innerText = 'Testing...';
+            btn.disabled = true;
+            
+            const payload = {
+                alert_type: 'Webhook',
+                severity: 'Info',
+                subject: 'Test Notification',
+                message: 'This is a test notification from your Network Monitor Security System checking your webhook connection status.',
+                sender: '{{ username|default:"Administrator" }}',
+                webhook_url: url,
+                is_test: true
+            };
+            
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/alerts', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if(data.success) {
+                    alert('Webhook test successful! Check your Slack/Teams/Discord channel.');
+                } else {
+                    alert('Webhook test failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         }
 
         async function submitAlert(e) {
@@ -897,6 +1133,49 @@
             } catch(e) {
                 content.innerHTML = `<div style="color:var(--accent-red); text-align:center; padding:2rem;">Failed to scan device.<br>${e.message}</div>`;
             }
+
+            // ── Vulnerability section appended AFTER existing device details ──
+            try {
+                const vulnRes = await fetch(`/api/vulnerabilities/for-ip/?ip=${ip}`);
+                const vulnData = await vulnRes.json();
+                const sevColor = (s) => ({ Critical:'#ef4444', High:'#f59e0b', Medium:'#eab308', Low:'#4a90e2', Info:'#6b7280' })[s] || '#6b7280';
+                const statusColor = (s) => ({ Open:'#ef4444', 'In Progress':'#f59e0b', Resolved:'#339933', 'False Positive':'#6b7280' })[s] || '#6b7280';
+
+                let vulnHtml = '';
+                if (vulnData.success && vulnData.count > 0) {
+                    const rows = vulnData.vulnerabilities.map(v => `
+                        <a href="${v.detail_url}" style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.75rem;border-radius:10px;text-decoration:none;transition:background 0.15s;" onmouseover="this.style.background='rgba(139,92,246,0.08)'" onmouseout="this.style.background='transparent'">
+                            <span style="display:inline-flex;padding:2px 7px;border-radius:6px;font-size:0.68rem;font-weight:700;border:1px solid ${sevColor(v.severity)};color:${sevColor(v.severity)};background:${sevColor(v.severity)}22;white-space:nowrap;">${v.severity}</span>
+                            <span style="flex:1;font-size:0.82rem;font-weight:600;color:var(--text-main);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${v.title}">${v.title}</span>
+                            ${v.cve ? `<span style="font-family:monospace;font-size:0.72rem;color:#8b5cf6;background:rgba(139,92,246,0.1);padding:1px 5px;border-radius:4px;border:1px solid rgba(139,92,246,0.25);white-space:nowrap;">${v.cve}</span>` : ''}
+                            <span style="font-size:0.7rem;padding:1px 6px;border-radius:4px;border:1px solid ${statusColor(v.status)};color:${statusColor(v.status)};background:${statusColor(v.status)}18;white-space:nowrap;">${v.status}</span>
+                        </a>
+                    `).join('');
+                    vulnHtml = `
+                        <div style="grid-column:span 2;margin-top:0.5rem;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:14px;padding:1rem;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
+                                <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:#8b5cf6;font-weight:700;">Detected Vulnerabilities (${vulnData.count})</div>
+                                <a href="/vulnerabilities/?q=${ip}" style="font-size:0.72rem;color:#8b5cf6;text-decoration:none;border:1px solid rgba(139,92,246,0.3);padding:2px 8px;border-radius:6px;">View All</a>
+                            </div>
+                            <div style="display:flex;flex-direction:column;gap:2px;max-height:180px;overflow-y:auto;">${rows}</div>
+                        </div>`;
+                } else if (vulnData.success && vulnData.count === 0) {
+                    vulnHtml = `
+                        <div style="grid-column:span 2;margin-top:0.5rem;background:rgba(51,153,51,0.05);border:1px solid rgba(51,153,51,0.15);border-radius:14px;padding:1rem;text-align:center;">
+                            <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--accent-green);font-weight:700;margin-bottom:0.4rem;">Detected Vulnerabilities</div>
+                            <div style="color:var(--text-muted);font-size:0.82rem;">&#10003; No vulnerabilities recorded for this IP</div>
+                        </div>`;
+                }
+                if (vulnHtml) {
+                    // Append into the existing grid
+                    const grid = content.querySelector('div[style*="grid-template-columns"]');
+                    if (grid) { grid.insertAdjacentHTML('beforeend', vulnHtml); lucide.createIcons(); }
+                    else { content.insertAdjacentHTML('beforeend', `<div style="display:grid;grid-template-columns:1fr;">${vulnHtml}</div>`); lucide.createIcons(); }
+                }
+            } catch(e) {
+                // Silently ignore vuln section errors — don't break device modal
+                console.warn('Vulnerability fetch for device modal failed:', e);
+            }
         }
 
         // State
@@ -935,25 +1214,172 @@
             }
         }
 
+        // ── Toast & Fallback Modal Helpers ────────────────────────────────────
+        function showNotification(title, message, type = 'success', duration = 5000) {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${type}`;
+            
+            let icon = 'info';
+            if (type === 'success') icon = 'check-circle-2';
+            else if (type === 'error') icon = 'alert-circle';
+            else if (type === 'warning') icon = 'alert-triangle';
+
+            toast.innerHTML = `
+                <div style="flex-shrink:0;"><i data-lucide="${icon}" style="width:20px; height:20px; color:${type === 'success' ? 'var(--accent-green)' : (type === 'error' ? 'var(--accent-red)' : (type === 'warning' ? 'var(--accent-orange)' : 'var(--accent-blue)'))}"></i></div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:0.9rem; margin-bottom:2px;">${title}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.4;">${message}</div>
+                </div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            if (duration) {
+                setTimeout(() => {
+                    toast.style.animation = 'fadeOut 0.3s ease forwards';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+            return toast;
+        }
+
+        function openFallbackModal() {
+            const modal = document.getElementById('fallbackModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                lucide.createIcons();
+            }
+        }
+
+        function closeFallbackModal() {
+            const modal = document.getElementById('fallbackModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function submitFallbackScan(e) {
+            e.preventDefault();
+            const target = document.getElementById('fallbackNetworkInput').value.trim();
+            if (!target) return;
+            closeFallbackModal();
+            document.getElementById('networkInput').value = target;
+            showNotification("Scan Started", `Scanning manual target: ${target}`, "info");
+            startScan(target);
+        }
+
+        async function loadStoredScanData() {
+            const lastScanText = document.getElementById('last-scan-text');
+            const container = document.getElementById('deviceContainer');
+            
+            try {
+                const res = await fetch('/api/scan/', { method: 'GET' });
+                if (!res.ok) throw new Error("Failed to load scan data");
+                const data = await res.json();
+                
+                if (data.success && data.devices && data.devices.length > 0) {
+                    masterData = data.devices;
+                    currentData = [...masterData];
+                    
+                    if (data.last_scan) {
+                        lastScanText.innerText = `Last Scan: ${data.last_scan}`;
+                    } else {
+                        lastScanText.innerText = `Scan data loaded`;
+                    }
+                    
+                    document.getElementById('current-filter').innerText = 'All';
+                    document.getElementById('current-sort').innerText = 'Name (A-Z)';
+                    updateDashboard();
+                } else {
+                    lastScanText.innerText = 'No scan data available';
+                    container.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1.2rem; padding:4rem 1rem; text-align:center; width:100%;">
+                        <div style="width:60px; height:60px; border-radius:50%; background:rgba(255,255,255,0.02); border:1px solid var(--glass-border); display:flex; align-items:center; justify-content:center; color:var(--text-muted);">
+                            <i data-lucide="radar" style="width:30px; height:30px;"></i>
+                        </div>
+                        <div style="color:var(--text-muted); font-size:1rem; font-weight:500;">
+                            No scan data available. Click 'Scan Network' to discover devices.
+                        </div>
+                        <button class="btn btn-primary" onclick="startScan()" style="padding:0.7rem 1.5rem; border-radius:12px; font-weight:700; background:var(--accent-green); color:#fff; border:none; display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                            <i data-lucide="play" style="width:16px;height:16px;"></i> Scan Network
+                        </button>
+                    </div>`;
+                    if (window.lucide) window.lucide.createIcons();
+                }
+            } catch (e) {
+                console.error("Failed to load cached scan results:", e);
+                lastScanText.innerText = 'Error checking scan history';
+            }
+        }
+
         // Auto-scan if a network was passed from the landing page
         const urlParams = new URLSearchParams(window.location.search);
         const initialNetwork = urlParams.get('network');
         if (initialNetwork) {
             document.getElementById('networkInput').value = initialNetwork;
             startScan(initialNetwork);
+        } else {
+            // Load stored scan results first without auto-triggering scans
+            loadStoredScanData();
         }
 
         async function startScan(targetNetwork) {
-            const networkToScan = typeof targetNetwork === 'string' ? targetNetwork : document.getElementById('networkInput').value;
-            if (!networkToScan) return;
+            let networkToScan = typeof targetNetwork === 'string' ? targetNetwork : document.getElementById('networkInput').value.trim();
+            
+            if (!networkToScan) {
+                showNotification("Detecting active subnet...", "Auto-detecting local subnet for scan.", "info");
+                try {
+                    const response = await fetch('/api/network-info/');
+                    if (!response.ok) throw new Error("HTTP error " + response.status);
+                    const data = await response.json();
+                    if (data.success && data.cidr_subnet) {
+                        networkToScan = data.cidr_subnet;
+                        document.getElementById('networkInput').value = networkToScan;
+                    } else {
+                        throw new Error("Could not detect active subnet");
+                    }
+                } catch (e) {
+                    showNotification("Auto-Detection Failed", "Opening fallback manual configuration.", "warning");
+                    openFallbackModal();
+                    return;
+                }
+            }
 
+            const SCAN_TIMEOUT_MS = 150000; // 150 seconds
             const container = document.getElementById('deviceContainer');
+
+            // Animated loading card with elapsed timer
+            let elapsedSec = 0;
             container.innerHTML = `
-                <div class="device-card flex-center">
-                    <i data-lucide="refresh-cw" class="animate-spin" style="margin-right: 10px; width: 20px; height: 20px;"></i> Working...
+                <div class="device-card flex-center" id="scan-progress-card" style="flex-direction:column;gap:0.6rem;padding:2rem;width:100%;">
+                    <div style="display:flex;align-items:center;gap:0.6rem;">
+                        <i data-lucide="radar" class="animate-spin" style="width:22px;height:22px;color:var(--accent-green);"></i>
+                        <span style="font-weight:600;">Scanning <code style="color:var(--accent-green);">${networkToScan}</code>&hellip;</span>
+                    </div>
+                    <div style="font-size:0.8rem;color:var(--text-muted);" id="scan-elapsed">Elapsed: 0s &nbsp;&bull;&nbsp; This may take up to 2 minutes</div>
+                    <div style="font-size:0.75rem;color:var(--text-muted);opacity:0.7;">Running ping sweep &rarr; port scan &rarr; OS fingerprinting&hellip;</div>
                 </div>`;
             lucide.createIcons();
             document.getElementById('refresh-icon').classList.add('animate-spin');
+
+            // Elapsed-time ticker
+            const ticker = setInterval(() => {
+                elapsedSec++;
+                const el = document.getElementById('scan-elapsed');
+                if (el) {
+                    const note = elapsedSec > 60 ? ' &nbsp;&bull;&nbsp; <span style="color:var(--accent-orange);">Still working&hellip;</span>' : ' &nbsp;&bull;&nbsp; This may take up to 2 minutes';
+                    el.innerHTML = `Elapsed: ${elapsedSec}s${note}`;
+                }
+            }, 1000);
+
+            // AbortController for hard timeout
+            const controller = new AbortController();
+            const hardTimeout = setTimeout(() => controller.abort(), SCAN_TIMEOUT_MS);
 
             try {
                 const csrfToken = getCookie('csrftoken');
@@ -963,13 +1389,13 @@
                         'Content-Type': 'application/json',
                         'X-CSRFToken': csrfToken,
                     },
-                    body: JSON.stringify({ network: networkToScan })
+                    body: JSON.stringify({ network: networkToScan }),
+                    signal: controller.signal
                 });
 
                 const responseData = await response.json();
 
                 if (!response.ok) {
-                    // responseData.error has a human-readable message from the Django proxy
                     throw new Error(responseData.error || `HTTP ${response.status}`);
                 }
 
@@ -982,10 +1408,33 @@
 
                 updateDashboard();
                 refreshAssetCounts();
+                refreshAlertMetrics();
+                refreshIncidentMetrics();
+                
+                // Update Last Scan text
+                const now = new Date();
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const pad = n => String(n).padStart(2, '0');
+                const lastScanStr = `${pad(now.getDate())} ${months[now.getMonth()]} ${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+                document.getElementById('last-scan-text').innerText = `Last Scan: ${lastScanStr}`;
+
+                showNotification("Scan Complete", `Discovered ${masterData.length} active devices.`, "success");
             } catch (error) {
                 console.error("Scan error:", error);
-                container.innerHTML = `<div class="device-card flex-center" style="color: var(--accent-red);">${error}</div>`;
+                const isTimeout = error.name === 'AbortError';
+                const msg = isTimeout
+                    ? `Scan timed out after ${SCAN_TIMEOUT_MS / 1000}s. The network may be large or the scanner is under load. Try a smaller subnet (e.g. /27) or ensure app.py is running.`
+                    : (error.message || String(error));
+                container.innerHTML = `<div class="device-card flex-center" style="color:var(--accent-red);flex-direction:column;gap:0.4rem;padding:1.5rem;text-align:center;">
+                    <i data-lucide="wifi-off" style="width:28px;height:28px;"></i>
+                    <strong>${isTimeout ? 'Scan Timed Out' : 'Scan Failed'}</strong>
+                    <span style="font-size:0.82rem;color:var(--text-muted);">${msg}</span>
+                </div>`;
+                lucide.createIcons();
+                showNotification(isTimeout ? "Scan Timed Out" : "Scan Failed", msg, "error");
             } finally {
+                clearInterval(ticker);
+                clearTimeout(hardTimeout);
                 document.getElementById('refresh-icon').classList.remove('animate-spin');
             }
         }
@@ -994,6 +1443,8 @@
             renderDevices(currentData);
             updateStats(masterData);
             updateNotifications(masterData);
+            refreshAlertMetrics();
+            refreshIncidentMetrics();
         }
 
         function applySort(type, label) {
@@ -1108,6 +1559,37 @@
                 const el = document.getElementById(`stat-${key}`);
                 if (el) el.innerText = value;
             }
+
+            // Immediately update Network Assets panel elements in the UI for instant feedback!
+            const activeOnly = data.filter(d => d.status === 'ACTIVE');
+            const assetCounts = {
+                pcs:          activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('pc') || r.includes('client') || r.includes('host') || r.includes('machine') || r.includes('vnc') || r.includes('desktop'); }).length,
+                workstations: activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('workstation'); }).length,
+                mobiles:      activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('mobile') || r.includes('phone') || r.includes('tablet'); }).length,
+                routers:      activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('router') && !r.includes('gateway'); }).length,
+                switches:     activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('switch'); }).length,
+                gateways:     activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('gateway'); }).length,
+                servers:      activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('server') || r.includes('infrastructure') || r.includes('service'); }).length,
+                databases:    activeOnly.filter(d => { const r = (d.role || '').toLowerCase(); return r.includes('database') || r.includes('db'); }).length,
+                total:        activeOnly.length
+            };
+
+            const assetMap = {
+                'asset-pcs':          assetCounts.pcs,
+                'asset-workstations': assetCounts.workstations,
+                'asset-mobiles':      assetCounts.mobiles,
+                'asset-routers':      assetCounts.routers,
+                'asset-switches':     assetCounts.switches,
+                'asset-gateways':     assetCounts.gateways,
+                'asset-servers':      assetCounts.servers,
+                'asset-databases':    assetCounts.databases,
+                'asset-total':        assetCounts.total
+            };
+
+            for (const [id, val] of Object.entries(assetMap)) {
+                const el = document.getElementById(id);
+                if (el) el.innerText = val;
+            }
         }
 
         // ── Granular asset counts from Django API ──────────────────────────────
@@ -1140,8 +1622,58 @@
         refreshAssetCounts();
         setInterval(refreshAssetCounts, 30000);
 
-        function updateNotifications(data) {
-            const notifs = data
+        async function refreshAlertMetrics() {
+            try {
+                const res = await fetch('/api/alert-metrics/');
+                if (!res.ok) return;
+                const d = await res.json();
+                const map = {
+                    'alert-metric-active': d.active,
+                    'alert-metric-resolved': d.resolved,
+                    'alert-metric-suppressed': d.suppressed,
+                    'alert-metric-total': d.total,
+                    'alert-metric-avg-time': `${d.avg_resolution_time_min} min`
+                };
+                for (const [id, val] of Object.entries(map)) {
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = val;
+                }
+            } catch (e) {
+                console.warn('Alert metrics fetch failed:', e);
+            }
+        }
+
+        // Poll alert metrics on load and every 30s
+        refreshAlertMetrics();
+        setInterval(refreshAlertMetrics, 30000);
+
+        async function refreshIncidentMetrics() {
+            try {
+                const res = await fetch('/api/incident-metrics/');
+                if (!res.ok) return;
+                const d = await res.json();
+                const map = {
+                    'incident-metric-active': d.active,
+                    'incident-metric-critical': d.critical_open,
+                    'incident-metric-resolved': d.resolved,
+                    'incident-metric-sla': `${d.sla_pct}%`,
+                    'incident-metric-mttr': `${d.mttr_min} min`
+                };
+                for (const [id, val] of Object.entries(map)) {
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = val;
+                }
+            } catch (e) {
+                console.warn('Incident metrics fetch failed:', e);
+            }
+        }
+
+        // Poll incident metrics on load and every 30s
+        refreshIncidentMetrics();
+        setInterval(refreshIncidentMetrics, 30000);
+
+        async function updateNotifications(data) {
+            const scanNotifs = data
                 .filter(d => d.alert && d.alert !== 'OK')
                 .map(d => ({
                     title: `Alert: ${d.alert}`,
@@ -1150,27 +1682,82 @@
                         (d.alert.includes('LEVEL 2') ? 'var(--accent-orange)' : 'var(--accent-blue)')
                 }));
 
+            let dbNotifs = [];
+            let hasUnreadDb = false;
+            try {
+                const res = await fetch('/api/notifications/');
+                if (res.ok) {
+                    const json = await res.json();
+                    if (json.success && json.notifications) {
+                        hasUnreadDb = json.notifications.some(n => !n.is_read);
+                        dbNotifs = json.notifications.map(n => {
+                            let color = 'var(--accent-blue)';
+                            if (n.level === 'Critical' || n.level === 'High') color = 'var(--accent-red)';
+                            else if (n.level === 'Medium') color = 'var(--accent-orange)';
+                            return {
+                                title: n.title,
+                                desc: n.message,
+                                color: color
+                            };
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to fetch database notifications:", e);
+            }
+
+            const notifs = [...dbNotifs, ...scanNotifs];
+
             const badge = document.getElementById('notif-badge');
             const header = document.getElementById('notif-header');
             const list = document.getElementById('notif-list');
 
-            if (notifs.length > 0) {
+            const hasScanAlerts = scanNotifs.length > 0;
+            if (hasUnreadDb || hasScanAlerts) {
                 badge.style.display = 'block';
-                header.innerText = `Alerts (${notifs.length})`;
-                list.innerHTML = notifs.map(n => `
-                    <div class="dropdown-item" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                        <span style="color: ${n.color}; font-weight: 700; font-size: 0.85rem;">${n.title}</span>
-                        <span style="font-size: 0.75rem; color: var(--text-muted);">${n.desc}</span>
-                    </div>
-                `).join('');
             } else {
                 badge.style.display = 'none';
+            }
+
+            if (notifs.length > 0) {
+                header.innerText = `Alerts (${notifs.length})`;
+                list.innerHTML = notifs.map(n => `
+                    <div class="dropdown-item" style="flex-direction: column; align-items: flex-start; gap: 4px; border-bottom: 1px solid var(--glass-border); padding: 0.8rem 1rem;">
+                        <span style="color: ${n.color}; font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="bell" style="width:12px;height:12px;"></i> ${n.title}
+                        </span>
+                        <span style="font-size: 0.75rem; color: var(--text-muted); line-height:1.4;">${n.desc}</span>
+                    </div>
+                `).join('');
+                if (window.lucide) window.lucide.createIcons();
+            } else {
                 header.innerText = 'No New Alerts';
                 list.innerHTML = `
                     <div style="padding: 1.5rem; text-align: center; color: var(--text-muted); font-size: 0.85rem;">
                         All systems normal.
                     </div>
                 `;
+            }
+        }
+
+        async function handleNotificationBellClick(event) {
+            toggleDropdown(event, 'notif-dropdown');
+            const dropdown = document.getElementById('notif-dropdown');
+            if (dropdown && dropdown.classList.contains('show')) {
+                const badge = document.getElementById('notif-badge');
+                if (badge) badge.style.display = 'none';
+                
+                try {
+                    await fetch('/api/notifications/mark-read/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': getCookie('csrftoken')
+                        }
+                    });
+                } catch (e) {
+                    console.warn("Failed to mark notifications read:", e);
+                }
             }
         }
 

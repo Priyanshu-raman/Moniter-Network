@@ -192,6 +192,10 @@
             <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Dashboard</span>
         </a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
         <a class="sidebar-btn" href="{% url 'account' %}">
             <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>My Account</span>
@@ -204,6 +208,8 @@
             <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Security Logs</span>
         </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
         <a class="sidebar-btn" href="{% url 'broadcast' %}">
             <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Broadcast</span>
@@ -212,6 +218,12 @@
             <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Settings</span>
         </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
 
         <div style="margin-top:auto;">
             <a href="{% url 'logout' %}" class="sidebar-btn">
@@ -299,6 +311,10 @@
                     <div class="form-group">
                         <label class="form-label" for="id_email">Email Address</label>
                         <input class="form-input" id="id_email" name="email" type="email" value="{{ profile.email }}" placeholder="you@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="id_department">Department</label>
+                        <input class="form-input" id="id_department" name="department" type="text" value="{{ profile.department }}" placeholder="e.g. SOC, IT Security">
                     </div>
                     <div class="form-group full">
                         <label class="form-label" for="id_bio">Bio / Notes</label>

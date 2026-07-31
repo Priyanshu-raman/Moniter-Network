@@ -165,6 +165,10 @@
             <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Dashboard</span>
         </a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
         <a class="sidebar-btn" href="{% url 'account' %}">
             <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>My Account</span>
@@ -177,14 +181,26 @@
             <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Security Logs</span>
         </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
         <a class="sidebar-btn" href="{% url 'broadcast' %}">
             <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
             <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'vulnerability_list' %}">
+            <i data-lucide="shield-x" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Vulnerabilities</span>
         </a>
         <a class="sidebar-btn" href="{% url 'settings' %}">
             <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
             <span>Settings</span>
         </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
 
         <div style="margin-top:auto;">
             <a href="{% url 'logout' %}" class="sidebar-btn">
@@ -253,7 +269,7 @@
                 <h2 style="font-size:1.3rem;font-weight:800;color:var(--text-main);margin:0;">No Devices Found</h2>
                 <p>
                     Scan your network from the <a href="{% url 'dashboard' %}" style="color:var(--accent-blue);">Dashboard</a>
-                    to populate the map. Devices will be auto-grouped into subnet zones (SOC, Admin, Corporate, Servers/DMZ).
+                    to populate the map. Devices will be auto-grouped into subnet zones based on their /24 prefix.
                 </p>
             </div>
             {% endif %}
@@ -324,12 +340,14 @@
 
                 zone.devices.forEach((dev) => {
                     const nodeId = `dev_${dev.id}`;
+                    const isOffline = dev.status === 'OFFLINE';
                     elements.push({
                         data: {
                             id: nodeId,
                             label: dev.ip,
                             type: 'device',
                             color: zone.color,
+                            offline: isOffline,
                             device: dev,
                             zone: zone.name
                         }
@@ -340,7 +358,7 @@
                             id: `edge_${hubId}_${nodeId}`,
                             source: hubId,
                             target: nodeId,
-                            color: zone.color
+                            color: isOffline ? 'rgba(255,255,255,0.12)' : zone.color
                         }
                     });
                 });
@@ -371,20 +389,22 @@
                             'border-color': 'data(color)',
                             'label': 'data(label)',
                             'color': 'data(color)',
-                            'font-size': '14px',
+                            'font-size': '11px',
                             'font-weight': 'bold',
                             'text-valign': 'center',
                             'text-halign': 'center',
-                            'width': '80px',
-                            'height': '30px'
+                            'width': 'label',
+                            'padding': '10px',
+                            'height': '34px'
                         }
                     },
                     {
-                        selector: 'node[type="device"]',
+                        // Active devices — solid, vivid
+                        selector: 'node[type="device"][offline=false]',
                         style: {
                             'shape': 'ellipse',
                             'background-color': 'data(color)',
-                            'background-opacity': 0.3,
+                            'background-opacity': 0.35,
                             'border-width': 1.5,
                             'border-color': 'data(color)',
                             'label': 'data(label)',
@@ -392,15 +412,36 @@
                             'font-size': '10px',
                             'text-valign': 'bottom',
                             'text-margin-y': 5,
-                            'width': '16px',
-                            'height': '16px'
+                            'width': '18px',
+                            'height': '18px'
+                        }
+                    },
+                    {
+                        // Offline devices — dimmed, dashed border
+                        selector: 'node[type="device"][offline=true]',
+                        style: {
+                            'shape': 'ellipse',
+                            'background-color': '#6b7280',
+                            'background-opacity': 0.15,
+                            'border-width': 1.5,
+                            'border-color': '#6b7280',
+                            'border-style': 'dashed',
+                            'label': 'data(label)',
+                            'color': '#6b7280',
+                            'font-size': '9px',
+                            'text-valign': 'bottom',
+                            'text-margin-y': 5,
+                            'width': '14px',
+                            'height': '14px',
+                            'opacity': 0.6
                         }
                     },
                     {
                         selector: 'node:selected',
                         style: {
                             'border-width': 3,
-                            'border-color': '#fff'
+                            'border-color': '#fff',
+                            'border-style': 'solid'
                         }
                     },
                     {
@@ -408,7 +449,7 @@
                         style: {
                             'width': 1.5,
                             'line-color': 'data(color)',
-                            'opacity': 0.6,
+                            'opacity': 0.55,
                             'curve-style': 'bezier'
                         }
                     },
@@ -419,38 +460,63 @@
                             'line-style': 'dashed',
                             'opacity': 0.8
                         }
+                    },
+                    {
+                        selector: 'edge[color="rgba(255,255,255,0.12)"]',
+                        style: {
+                            'width': 1,
+                            'line-style': 'dashed',
+                            'opacity': 0.3
+                        }
                     }
                 ],
                 layout: {
                     name: 'cose',
                     animate: true,
-                    nodeRepulsion: 400000,
-                    idealEdgeLength: 80
+                    nodeRepulsion: 900000,
+                    idealEdgeLength: 120,
+                    numIter: 1000,
+                    componentSpacing: 80
                 }
             });
 
             // Hover effects
             cy.on('mouseover', 'node', function(e) {
                 const node = e.target;
-                node.style('background-opacity', 0.8);
+                if (!node.data('offline')) node.style('background-opacity', 0.8);
                 document.body.style.cursor = 'pointer';
             });
             cy.on('mouseout', 'node', function(e) {
                 const node = e.target;
-                node.style('background-opacity', node.data('type') === 'hub' ? 0.2 : 0.3);
+                if (node.data('type') === 'hub') node.style('background-opacity', 0.2);
+                else if (node.data('offline')) node.style('background-opacity', 0.15);
+                else node.style('background-opacity', 0.35);
                 document.body.style.cursor = 'default';
             });
 
-            // Click event -> show details
-            cy.on('tap', 'node', function(evt){
+            // Click event — show static device details (no Flask call needed)
+            cy.on('tap', 'node', function(evt) {
                 const node = evt.target;
                 if (node.data('type') === 'device' && node.data('device')) {
-                    openDeviceDetailsMap(node.data('device').ip);
+                    const dev = node.data('device');
+                    const zone = node.data('zone');
+                    const isOffline = dev.status === 'OFFLINE';
+                    const statusColor = isOffline ? 'var(--accent-red)' : 'var(--accent-green)';
+                    const panel = document.getElementById('detail-panel');
+                    panel.classList.add('show');
+                    document.getElementById('dp-ip').textContent    = dev.ip;
+                    document.getElementById('dp-zone').textContent  = zone;
+                    document.getElementById('dp-role').textContent  = dev.role || 'Unknown';
+                    document.getElementById('dp-type').textContent  = dev.device_type || 'Unknown';
+                    document.getElementById('dp-mac').textContent   = dev.mac || '—';
+                    const statusEl = document.getElementById('dp-status');
+                    statusEl.textContent = dev.status;
+                    statusEl.style.color = statusColor;
                 } else {
                     document.getElementById('detail-panel').classList.remove('show');
                 }
             });
-            
+
             cy.on('tap', function(evt) {
                 if (evt.target === cy) {
                     document.getElementById('detail-panel').classList.remove('show');

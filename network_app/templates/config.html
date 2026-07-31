@@ -1,0 +1,798 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuration Panel — Monitor OS</title>
+    <meta name="description" content="Centralized system configuration settings.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .config-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .config-page::before {
+            content: ''; position: absolute;
+            width: 700px; height: 700px; border-radius: 50%;
+            background: var(--accent-green); filter: blur(140px); opacity: 0.07;
+            top: -200px; right: -200px; pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(51,153,51,0.3); }
+        .sidebar-btn.active { background: rgba(51,153,51,0.12); border-color: var(--accent-green); color: var(--accent-green); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-green); color: var(--accent-green); }
+
+        /* ── Main layout ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 5rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; max-width: 1100px;
+        }
+        .page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 1rem;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-green); }
+
+        .admin-badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0.3rem 0.8rem; border-radius: 50px;
+            font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;
+            background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.35);
+            color: var(--accent-orange);
+        }
+
+        /* ── Header control group ── */
+        .header-controls {
+            display: flex; gap: 0.8rem; flex-wrap: wrap;
+        }
+
+        /* ── Grid layouts ── */
+        .config-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem;
+        }
+
+        /* ── Card styling ── */
+        .config-section {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); border-radius: 20px;
+            box-shadow: var(--glass-shadow); overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        .section-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.01);
+        }
+        .section-label {
+            font-size: 0.8rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1.2px; color: var(--accent-green);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .section-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.2rem; }
+
+        /* ── Forms ── */
+        .form-row {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+        }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group.full { grid-column: 1 / -1; }
+        .form-label {
+            font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.8px; color: var(--text-muted);
+        }
+        .settings-input, .settings-select {
+            width: 100%; background: rgba(0,0,0,0.25);
+            border: 1px solid var(--glass-border); border-radius: 10px;
+            padding: 0.65rem 0.85rem; color: var(--text-main);
+            font-size: 0.88rem; font-family: 'Inter', sans-serif;
+            transition: all 0.15s ease; outline: none;
+        }
+        .settings-input:focus, .settings-select:focus {
+            border-color: var(--accent-green);
+            background: rgba(51,153,51,0.05);
+            box-shadow: 0 0 0 3px rgba(51,153,51,0.12);
+        }
+        .settings-select {
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center;
+            padding-right: 2.5rem; cursor: pointer;
+        }
+        .settings-select option { background: #11151c; color: var(--text-main); }
+
+        .checkbox-group {
+            display: flex; align-items: center; gap: 0.6rem; margin-top: 0.2rem;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 16px; height: 16px; accent-color: var(--accent-green); cursor: pointer;
+        }
+
+        /* ── Buttons ── */
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.65rem 1.25rem; border-radius: 10px;
+            background: rgba(51,153,51,0.12); border: 1px solid rgba(51,153,51,0.4);
+            color: var(--accent-green); font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-primary:hover { background: rgba(51,153,51,0.22); border-color: var(--accent-green); }
+
+        .btn-ghost {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.65rem 1.25rem; border-radius: 10px;
+            background: transparent; border: 1px solid var(--glass-border);
+            color: var(--text-muted); font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.15s ease;
+            text-decoration: none; font-family: 'Inter', sans-serif;
+        }
+        .btn-ghost:hover { border-color: var(--accent-green); color: var(--accent-green); }
+
+        .btn-danger {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.65rem 1.25rem; border-radius: 10px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+            color: var(--accent-red); font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.15s ease; font-family: 'Inter', sans-serif;
+        }
+        .btn-danger:hover { background: rgba(239,68,68,0.18); }
+
+        .btn-action {
+            padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700;
+        }
+
+        /* ── Modern Toast Container ── */
+        #toast-container {
+            position: fixed; bottom: 24px; right: 24px;
+            display: flex; flex-direction: column; gap: 12px; z-index: 9999;
+        }
+        .toast-notification {
+            min-width: 320px; max-width: 400px; padding: 1.25rem;
+            background: rgba(17, 25, 35, 0.85); backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border);
+            border-left: 4px solid var(--accent-green); box-shadow: var(--glass-shadow);
+            border-radius: 12px; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .toast-notification.error { border-left-color: var(--accent-red); }
+        .toast-notification.warning { border-left-color: var(--accent-orange); }
+        .toast-notification.info { border-left-color: var(--accent-blue); }
+
+        @keyframes slideIn { from { opacity:0; transform:translateX(100px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes fadeOut { from { opacity:1; transform:scale(1); } to { opacity:0; transform:scale(0.9); } }
+
+        @media (max-width: 900px) {
+            .config-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body class="config-page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}" id="nav-dashboard">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}" id="nav-assets">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" id="nav-account">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}" id="nav-map">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}" id="nav-logs">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}" id="nav-settings">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Configuration</span>
+        </a>
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <div class="page-header">
+            <div class="page-title">
+                <i data-lucide="sliders" style="width:28px;height:28px;"></i>
+                Centralized Configuration
+                <span class="admin-badge"><i data-lucide="shield" style="width:11px;height:11px;"></i> System Administrator</span>
+            </div>
+
+            <div class="header-controls">
+                <button class="btn-ghost" onclick="exportConfig()"><i data-lucide="download" style="width:15px;height:15px;"></i> Export</button>
+                <button class="btn-ghost" onclick="triggerImport()"><i data-lucide="upload" style="width:15px;height:15px;"></i> Import</button>
+                <input type="file" id="importFile" style="display:none;" onchange="importConfig(event)" accept=".json">
+                <button class="btn-danger" onclick="restoreDefaults()"><i data-lucide="rotate-ccw" style="width:15px;height:15px;"></i> Restore Defaults</button>
+            </div>
+        </div>
+
+        <form id="configForm" onsubmit="saveConfig(event)">
+            <div class="config-grid">
+
+                <!-- 1. NETWORK SETTINGS -->
+                <div class="config-section">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="network" style="width:16px;height:16px;"></i> Network Discovery</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Default IP Range</label>
+                                <input type="text" data-key="network.default_ip_range" value="{{ config.network.default_ip_range }}" class="settings-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Gateway IP</label>
+                                <input type="text" data-key="network.gateway_ip" value="{{ config.network.gateway_ip }}" class="settings-input" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Scan Interval (Sec)</label>
+                                <select data-key="network.scan_interval" class="settings-select">
+                                    <option value="30" {% if config.network.scan_interval == "30" %}selected{% endif %}>30 Seconds</option>
+                                    <option value="60" {% if config.network.scan_interval == "60" %}selected{% endif %}>1 Minute</option>
+                                    <option value="300" {% if config.network.scan_interval == "300" %}selected{% endif %}>5 Minutes</option>
+                                    <option value="600" {% if config.network.scan_interval == "600" %}selected{% endif %}>10 Minutes</option>
+                                </select>
+                            </div>
+                        </div>
+                        <hr style="border:none; border-top:1px solid var(--glass-border); margin:0.5rem 0;">
+                        <div class="form-group">
+                            <label class="form-label">Active Discovery Methods</label>
+                            <div class="checkbox-group">
+                                <input type="checkbox" data-key="network.device_discovery_settings.scapy_enabled" {% if config.network.device_discovery_settings.scapy_enabled %}checked{% endif %}>
+                                <span style="font-size:0.85rem; color:var(--text-main);">Scapy ARP Scan</span>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" data-key="network.device_discovery_settings.ping_sweep_enabled" {% if config.network.device_discovery_settings.ping_sweep_enabled %}checked{% endif %}>
+                                <span style="font-size:0.85rem; color:var(--text-main);">Ping Sweep</span>
+                            </div>
+                            <div class="checkbox-group">
+                                <input type="checkbox" data-key="network.device_discovery_settings.arp_table_enabled" {% if config.network.device_discovery_settings.arp_table_enabled %}checked{% endif %}>
+                                <span style="font-size:0.85rem; color:var(--text-main);">Passive ARP Cache Discovery</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. THRESHOLDS -->
+                <div class="config-section">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="gauge" style="width:16px;height:16px;"></i> Alert Thresholds</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">CPU Alert Threshold (%)</label>
+                                <input type="number" min="0" max="100" data-key="thresholds.cpu_alert_threshold" value="{{ config.thresholds.cpu_alert_threshold }}" class="settings-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Memory Alert Threshold (%)</label>
+                                <input type="number" min="0" max="100" data-key="thresholds.memory_alert_threshold" value="{{ config.thresholds.memory_alert_threshold }}" class="settings-input" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Disk Usage Threshold (%)</label>
+                                <input type="number" min="0" max="100" data-key="thresholds.disk_usage_threshold" value="{{ config.thresholds.disk_usage_threshold }}" class="settings-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Network Load Threshold (%)</label>
+                                <input type="number" min="0" max="100" data-key="thresholds.network_utilization_threshold" value="{{ config.thresholds.network_utilization_threshold }}" class="settings-input" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. WEBHOOKS & ALERTS -->
+                <div class="config-section" style="grid-column: span 2;">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="bell" style="width:16px;height:16px;"></i> Alerts, Webhooks, &amp; Email Escalations</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Discord Webhook URL</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="url" id="webhook-discord" data-key="alerts.discord_webhook_url" value="{{ config.alerts.discord_webhook_url }}" placeholder="https://discord.com/api/webhooks/..." class="settings-input">
+                                    <button type="button" onclick="testTargetWebhook('webhook-discord', this)" class="btn-primary btn-action">Test</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Slack Webhook URL</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="url" id="webhook-slack" data-key="alerts.slack_webhook_url" value="{{ config.alerts.slack_webhook_url }}" placeholder="https://hooks.slack.com/services/..." class="settings-input">
+                                    <button type="button" onclick="testTargetWebhook('webhook-slack', this)" class="btn-primary btn-action">Test</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Microsoft Teams Webhook URL</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="url" id="webhook-teams" data-key="alerts.teams_webhook_url" value="{{ config.alerts.teams_webhook_url }}" placeholder="https://webhook.office.com/..." class="settings-input">
+                                    <button type="button" onclick="testTargetWebhook('webhook-teams', this)" class="btn-primary btn-action">Test</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr style="border:none; border-top:1px solid var(--glass-border); margin:0.5rem 0;">
+
+                        <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);"><i data-lucide="mail" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> SMTP Mail Dispatch Settings</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">SMTP Sender Email</label>
+                                <input type="email" data-key="alerts.email_sender" value="{{ config.alerts.email_sender }}" class="settings-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">SMTP Sender Password</label>
+                                <input type="password" data-key="alerts.email_password" value="{{ config.alerts.email_password }}" class="settings-input">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">SMTP Server Host</label>
+                                <input type="text" data-key="alerts.smtp_server" value="{{ config.alerts.smtp_server }}" class="settings-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">SMTP Port</label>
+                                <input type="number" data-key="alerts.smtp_port" value="{{ config.alerts.smtp_port }}" class="settings-input">
+                            </div>
+                        </div>
+
+                        <hr style="border:none; border-top:1px solid var(--glass-border); margin:0.5rem 0;">
+
+                        <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);"><i data-lucide="shield-alert" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Level Severity Settings &amp; Escalation Contacts</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Level 1 Recipient Email</label>
+                                <input type="email" data-key="alerts.email_recipients.level_1_email" value="{{ config.alerts.email_recipients.level_1_email }}" class="settings-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Level 1 Escalation Age (Seconds)</label>
+                                <input type="number" data-key="alerts.alert_severity_levels.level_1_seconds" value="{{ config.alerts.alert_severity_levels.level_1_seconds }}" class="settings-input" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Level 2 Recipient Email</label>
+                                <input type="email" data-key="alerts.email_recipients.level_2_email" value="{{ config.alerts.email_recipients.level_2_email }}" class="settings-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Level 2 Escalation Age (Seconds)</label>
+                                <input type="number" data-key="alerts.alert_severity_levels.level_2_seconds" value="{{ config.alerts.alert_severity_levels.level_2_seconds }}" class="settings-input" required>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Level 3 Recipient Email</label>
+                                <input type="email" data-key="alerts.email_recipients.level_3_email" value="{{ config.alerts.email_recipients.level_3_email }}" class="settings-input">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Level 3 Escalation Age (Seconds)</label>
+                                <input type="number" data-key="alerts.alert_severity_levels.level_3_seconds" value="{{ config.alerts.alert_severity_levels.level_3_seconds }}" class="settings-input" required>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. MONITORING SCHEDULING -->
+                <div class="config-section">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="clock" style="width:16px;height:16px;"></i> Monitoring Scheduling</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" data-key="monitoring.auto_scan_enabled" {% if config.monitoring.auto_scan_enabled %}checked{% endif %}>
+                                <span style="font-size:0.85rem; color:var(--text-main); font-weight:700;">Enable Automatic Subnet Scan</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Scan Frequency (Seconds)</label>
+                            <input type="number" data-key="monitoring.scan_frequency" value="{{ config.monitoring.scan_frequency }}" class="settings-input" required>
+                        </div>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" data-key="monitoring.asset_discovery_settings.active_subnet_only" {% if config.monitoring.asset_discovery_settings.active_subnet_only %}checked{% endif %}>
+                                <span style="font-size:0.85rem; color:var(--text-muted);">Restrict Discovery to Active Subnet Range Only</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">High-Risk Ports (comma separated)</label>
+                            <input type="text" data-key="monitoring.risk_scoring_parameters.high_threat_ports" value="{{ config.monitoring.risk_scoring_parameters.high_threat_ports|join:',' }}" class="settings-input">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Medium-Risk Ports (comma separated)</label>
+                            <input type="text" data-key="monitoring.risk_scoring_parameters.medium_threat_ports" value="{{ config.monitoring.risk_scoring_parameters.medium_threat_ports|join:',' }}" class="settings-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. SECURITY & PASSWORDS -->
+                <div class="config-section">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="shield-check" style="width:16px;height:16px;"></i> Security Policies</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label class="form-label">Session Timeout Age (Seconds)</label>
+                            <input type="number" data-key="security.session_timeout" value="{{ config.security.session_timeout }}" class="settings-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Failed Login Limit (Attempts)</label>
+                            <input type="number" data-key="security.failed_login_limits" value="{{ config.security.failed_login_limits }}" class="settings-input" required>
+                        </div>
+                        <hr style="border:none; border-top:1px solid var(--glass-border); margin:0.5rem 0;">
+                        <div style="font-weight:700; font-size:0.85rem; color:var(--text-main); margin-bottom:0.5rem;">Password Policy Complexity</div>
+                        <div class="form-group">
+                            <label class="form-label">Minimum Password Length</label>
+                            <input type="number" min="4" max="32" data-key="security.password_policy_settings.min_length" value="{{ config.security.password_policy_settings.min_length }}" class="settings-input" required>
+                        </div>
+                        <div class="form-group">
+                            <div class="checkbox-group">
+                                <input type="checkbox" data-key="security.password_policy_settings.require_special" {% if config.security.password_policy_settings.require_special %}checked{% endif %}>
+                                <span style="font-size:0.85rem; color:var(--text-main);">Require Special Characters</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5b. ALERT COOLDOWN TIMERS -->
+                <div class="config-section">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="bell" style="width:16px;height:16px;"></i> Alert Cooldowns (Minutes)</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-group">
+                            <label class="form-label">Critical Severity Cooldown (Min)</label>
+                            <input type="number" min="1" data-key="cooldowns.critical" value="{{ config.cooldowns.critical }}" class="settings-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">High Severity Cooldown (Min)</label>
+                            <input type="number" min="1" data-key="cooldowns.high" value="{{ config.cooldowns.high }}" class="settings-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Medium Severity Cooldown (Min)</label>
+                            <input type="number" min="1" data-key="cooldowns.medium" value="{{ config.cooldowns.medium }}" class="settings-input" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Low Severity Cooldown (Min)</label>
+                            <input type="number" min="1" data-key="cooldowns.low" value="{{ config.cooldowns.low }}" class="settings-input" required>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. DASHBOARD & INTERFACE -->
+                <div class="config-section" style="grid-column: span 2;">
+                    <div class="section-header">
+                        <div class="section-label"><i data-lucide="layout" style="width:16px;height:16px;"></i> Dashboard &amp; Interface visibility</div>
+                    </div>
+                    <div class="section-body">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Data Refresh Interval (Sec)</label>
+                                <input type="number" data-key="dashboard.refresh_interval" value="{{ config.dashboard.refresh_interval }}" class="settings-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Color Theme</label>
+                                <select data-key="dashboard.chart_settings.theme" class="settings-select">
+                                    <option value="cyberpunk" {% if config.dashboard.chart_settings.theme == "cyberpunk" %}selected{% endif %}>Cyberpunk (Default)</option>
+                                    <option value="matrix" {% if config.dashboard.chart_settings.theme == "matrix" %}selected{% endif %}>Matrix Green</option>
+                                    <option value="dark" {% if config.dashboard.chart_settings.theme == "dark" %}selected{% endif %}>Deep Slate Dark</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Visible Widgets</label>
+                            <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+                                <div class="checkbox-group">
+                                    <input type="checkbox" data-key="dashboard.widget_visibility.network_assets" {% if config.dashboard.widget_visibility.network_assets %}checked{% endif %}>
+                                    <span style="font-size:0.85rem; color:var(--text-main);">Network Assets Widget</span>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" data-key="dashboard.widget_visibility.all_devices" {% if config.dashboard.widget_visibility.all_devices %}checked{% endif %}>
+                                    <span style="font-size:0.85rem; color:var(--text-main);">All Devices Table List</span>
+                                </div>
+                                <div class="checkbox-group">
+                                    <input type="checkbox" data-key="dashboard.widget_visibility.level_escalations" {% if config.dashboard.widget_visibility.level_escalations %}checked{% endif %}>
+                                    <span style="font-size:0.85rem; color:var(--text-main);">Escalations Status Pannel</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Footer Save Bar -->
+            <div style="display:flex; justify-content:flex-end; margin-top:2.5rem; padding-top:1.5rem; border-top:1px solid var(--glass-border);">
+                <button type="submit" class="btn-primary" style="padding:0.9rem 2.5rem; font-size:0.95rem; border-radius:12px;">
+                    <i data-lucide="save" style="width:18px;height:18px;"></i>
+                    Commit Configuration Changes
+                </button>
+            </div>
+        </form>
+
+    </div>
+
+    <!-- Toast Notifications Container -->
+    <div id="toast-container"></div>
+
+    <script>
+        lucide.createIcons();
+
+        // ── Sidebar Toggle ───────────────────────────────────────────
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title   = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity    = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        // ── Toast Notifications Helper ──────────────────────────────
+        function showNotification(title, message, type = 'success') {
+            let container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${type}`;
+            
+            let icon = 'info';
+            if (type === 'success') icon = 'check-circle-2';
+            else if (type === 'error') icon = 'alert-circle';
+            else if (type === 'warning') icon = 'alert-triangle';
+
+            toast.innerHTML = `
+                <div style="flex-shrink:0;"><i data-lucide="${icon}" style="width:20px; height:20px; color:${type === 'success' ? 'var(--accent-green)' : (type === 'error' ? 'var(--accent-red)' : 'var(--accent-orange)')}"></i></div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:0.9rem; margin-bottom:2px;">${title}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.4;">${message}</div>
+                </div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.style.animation = 'fadeOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        // ── Construct Nested Object from Form inputs ──────────────────
+        function buildConfigJSON() {
+            const config = {};
+            const inputs = document.querySelectorAll('#configForm [data-key]');
+            
+            inputs.forEach(input => {
+                const keyPath = input.getAttribute('data-key');
+                const keys = keyPath.split('.');
+                let current = config;
+                
+                for (let i = 0; i < keys.length - 1; i++) {
+                    const k = keys[i];
+                    if (!current[k]) current[k] = {};
+                    current = current[k];
+                }
+                
+                const lastKey = keys[keys.length - 1];
+                if (input.type === 'checkbox') {
+                    current[lastKey] = input.checked;
+                } else if (input.type === 'number') {
+                    current[lastKey] = parseFloat(input.value);
+                } else {
+                    current[lastKey] = input.value;
+                }
+            });
+            return config;
+        }
+
+        // ── Save Config Changes ───────────────────────────────────────
+        async function saveConfig(e) {
+            e.preventDefault();
+            const configData = buildConfigJSON();
+            
+            try {
+                const res = await fetch('{% url "api_config" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(configData)
+                });
+                
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showNotification("Configuration Saved", "Settings successfully saved and synchronized.", "success");
+                } else {
+                    const errs = data.errors ? data.errors.join("<br>") : (data.error || "Unknown error occurred.");
+                    showNotification("Save Failed", errs, "error");
+                }
+            } catch (err) {
+                showNotification("Connection Failure", err.message, "error");
+            }
+        }
+
+        // ── Test Webhook URLs directly from config ───────────────────
+        async function testTargetWebhook(inputId, btn) {
+            const url = document.getElementById(inputId).value.trim();
+            if (!url) return alert('Enter a webhook URL first.');
+            
+            const originalText = btn.innerText;
+            btn.innerText = 'Testing...';
+            btn.disabled = true;
+            
+            const payload = {
+                alert_type: 'Webhook',
+                severity: 'Info',
+                subject: 'Configuration Test Notification',
+                message: 'This is a test notification confirming configuration settings are functioning properly.',
+                sender: 'System Admin',
+                webhook_url: url,
+                is_test: true
+            };
+            
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/alerts', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showNotification("Test Successful", "Test alert dispatched successfully to target channel.", "success");
+                } else {
+                    showNotification("Test Failed", data.error || "Failed payload dispatch", "error");
+                }
+            } catch (err) {
+                showNotification("Request Failed", err.message, "error");
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // ── Restore default config settings ──────────────────────────
+        async function restoreDefaults() {
+            if (!confirm("Are you absolutely sure you want to restore system settings to defaults? This cannot be undone.")) return;
+            
+            try {
+                const res = await fetch('{% url "api_config_restore" %}', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showNotification("Defaults Restored", "Factory default config applied. Page reloading...", "success");
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    showNotification("Restore Failed", data.error || "Server error", "error");
+                }
+            } catch (err) {
+                showNotification("Request Failed", err.message, "error");
+            }
+        }
+
+        // ── Export Configuration ─────────────────────────────────────
+        function exportConfig() {
+            window.location.href = '{% url "api_config_export" %}';
+        }
+
+        // ── Import Configuration JSON File ───────────────────────────
+        function triggerImport() {
+            document.getElementById('importFile').click();
+        }
+
+        function importConfig(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async function(evt) {
+                const jsonText = evt.target.result;
+                try {
+                    // Try parsing local client side to check validity first
+                    JSON.parse(jsonText);
+                    
+                    const res = await fetch('{% url "api_config" %}', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: jsonText
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showNotification("Configuration Imported", "Successfully parsed and loaded settings. Reloading...", "success");
+                        setTimeout(() => location.reload(), 1500);
+                    } else {
+                        const errs = data.errors ? data.errors.join("<br>") : (data.error || "Import rejected");
+                        showNotification("Import Rejected", errs, "error");
+                    }
+                } catch (err) {
+                    showNotification("Parsing Failed", "Invalid JSON format in imported file.", "error");
+                }
+            };
+            reader.readAsText(file);
+            // Clear input
+            e.target.value = "";
+        }
+    </script>
+</body>
+</html>

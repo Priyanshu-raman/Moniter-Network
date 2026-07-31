@@ -1,0 +1,411 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Incident Response Center - Monitor OS</title>
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .dashboard-page { display:flex; width:100%; height:100vh; overflow:hidden; background:var(--bg-deep); position:relative; }
+        .sidebar { width:80px; min-width:80px; height:100%; background:var(--glass-bg); backdrop-filter:var(--glass-blur); border-right:1px solid var(--glass-border); box-shadow:var(--glass-shadow); padding:2.5rem 0.75rem; display:flex; flex-direction:column; gap:1rem; position:relative; overflow:hidden; transition:width 0.1s ease; }
+        .sidebar.expanded { width:220px; min-width:220px; }
+        .sidebar-btn { background:transparent; color:var(--text-main); border:1px solid transparent; padding:1rem; border-radius:16px; font-weight:500; text-align:left; cursor:pointer; transition:all 0.1s ease; font-size:0.95rem; display:flex; align-items:center; gap:1.25rem; width:100%; overflow:hidden; white-space:nowrap; text-decoration:none; }
+        .sidebar-btn span { opacity:0; transition:opacity 0.1s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity:1; }
+        .sidebar-btn:hover { background:var(--glass-bg-hover); border-color:rgba(51,153,51,0.3); }
+        .sidebar-btn.active { background:rgba(51,153,51,0.12); border-color:var(--accent-green); color:var(--accent-green); }
+        .header-toggle { display:flex; align-items:center; justify-content:center; width:50px; height:50px; border-radius:14px; background:rgba(255,255,255,0.03); border:1px solid var(--glass-border); color:var(--text-main); cursor:pointer; transition:all 0.1s ease; flex-shrink:0; }
+        .main-wrapper { flex:1; display:flex; flex-direction:column; height:100%; padding:1.5rem; gap:1.2rem; overflow:hidden; position:relative; z-index:1; }
+        .page-header { display:flex; justify-content:space-between; align-items:center; }
+        .page-title { font-size:1.6rem; font-weight:800; color:var(--text-main); display:flex; align-items:center; gap:0.8rem; }
+        .page-title i { color:var(--accent-green); }
+
+        /* Tab buttons - match broadcast.html */
+        .tabs { display:flex; gap:1rem; }
+        .tab-btn { background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-muted); padding:0.8rem 1.5rem; border-radius:12px; cursor:pointer; font-weight:600; display:flex; align-items:center; gap:0.5rem; transition:all 0.2s; text-decoration:none; }
+        .tab-btn:hover { background:var(--glass-bg-hover); color:var(--text-main); }
+        .tab-btn.active { background:rgba(51,153,51,0.1); border-color:var(--accent-green); color:var(--accent-green); }
+
+        /* Metric cards */
+        .metrics-row { display:grid; grid-template-columns:repeat(7, 1fr); gap:1rem; }
+        .metric-card { background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:16px; padding:1.2rem 1rem; display:flex; flex-direction:column; gap:0.4rem; position:relative; overflow:hidden; }
+        .metric-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg, rgba(51,153,51,0.05) 0%, transparent 60%); pointer-events:none; }
+        .metric-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:0.2rem; }
+        .metric-value { font-size:1.7rem; font-weight:800; color:var(--text-main); line-height:1; }
+        .metric-label { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); font-weight:600; }
+        .metric-card.red .metric-icon { background:rgba(239,68,68,0.15); color:#ef4444; }
+        .metric-card.orange .metric-icon { background:rgba(245,158,11,0.15); color:#f59e0b; }
+        .metric-card.green .metric-icon { background:rgba(51,153,51,0.15); color:var(--accent-green); }
+        .metric-card.blue .metric-icon { background:rgba(59,130,246,0.15); color:#3b82f6; }
+        .metric-card.purple .metric-icon { background:rgba(139,92,246,0.15); color:#8b5cf6; }
+
+        /* Controls */
+        .controls-row { display:flex; gap:0.8rem; align-items:center; flex-wrap:wrap; }
+        .search-bar { flex:1; min-width:200px; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); border-radius:12px; padding:0.65rem 1.1rem; color:var(--text-main); font-family:inherit; transition:border-color 0.2s; }
+        .search-bar:focus { outline:none; border-color:var(--accent-green); }
+        .cyber-select { background:rgba(0,0,0,0.25); border:1px solid var(--glass-border); border-radius:12px; padding:0.65rem 2.2rem 0.65rem 0.9rem; color:var(--text-main); font-size:0.88rem; cursor:pointer; transition:all 0.2s; font-family:inherit; appearance:none; -webkit-appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23339933' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'></polyline></svg>"); background-repeat:no-repeat; background-position:right 0.7rem center; background-size:14px; }
+        .cyber-select:focus { outline:none; border-color:var(--accent-green); box-shadow:0 0 12px rgba(51,153,51,0.2); }
+        .cyber-select option { background:#08111f; color:var(--text-main); }
+        .btn { background:rgba(255,255,255,0.05); color:var(--text-main); border:1px solid var(--glass-border); padding:0.65rem 1.2rem; border-radius:12px; cursor:pointer; font-weight:600; font-size:0.88rem; transition:all 0.2s; display:inline-flex; align-items:center; gap:0.5rem; text-decoration:none; }
+        .btn:hover { background:var(--glass-bg-hover); }
+        .btn-primary { background:rgba(51,153,51,0.18); border-color:var(--accent-green); color:var(--accent-green); }
+        .btn-primary:hover { background:rgba(51,153,51,0.3); box-shadow:0 0 18px rgba(51,153,51,0.25); }
+        .btn-danger { background:rgba(239,68,68,0.12); border-color:#ef4444; color:#ef4444; }
+
+        /* Table */
+        .table-wrapper { flex:1; overflow:auto; background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:20px; padding:0; }
+        table { width:100%; border-collapse:collapse; font-size:0.85rem; }
+        thead { position:sticky; top:0; z-index:5; }
+        thead tr { background:rgba(0,0,0,0.4); backdrop-filter:blur(10px); }
+        th { padding:0.9rem 0.8rem; text-align:left; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-muted); font-weight:700; border-bottom:1px solid var(--glass-border); white-space:nowrap; }
+        td { padding:0.75rem 0.8rem; border-bottom:1px solid rgba(255,255,255,0.04); color:var(--text-main); vertical-align:middle; }
+        tbody tr { transition:background 0.15s; cursor:pointer; }
+        tbody tr:hover { background:rgba(51,153,51,0.06); }
+        tbody tr:last-child td { border-bottom:none; }
+
+        /* Badges */
+        .badge { display:inline-flex; align-items:center; padding:0.25rem 0.65rem; border-radius:8px; font-size:0.72rem; font-weight:700; border:1px solid; letter-spacing:0.02em; }
+        /* Status */
+        .badge-new         { background:rgba(59,130,246,0.12); border-color:#3b82f6; color:#3b82f6; }
+        .badge-active      { background:rgba(239,68,68,0.12); border-color:#ef4444; color:#ef4444; }
+        .badge-acknowledged{ background:rgba(245,158,11,0.12); border-color:#f59e0b; color:#f59e0b; }
+        .badge-investigating{ background:rgba(139,92,246,0.12); border-color:#8b5cf6; color:#8b5cf6; }
+        .badge-resolved    { background:rgba(51,153,51,0.12); border-color:var(--accent-green); color:var(--accent-green); }
+        .badge-closed      { background:rgba(107,114,128,0.12); border-color:#6b7280; color:#6b7280; }
+        .badge-reopened    { background:rgba(239,68,68,0.12); border-color:#ef4444; color:#ef4444; }
+        /* SLA */
+        .sla-met      { background:rgba(51,153,51,0.12); border-color:var(--accent-green); color:var(--accent-green); }
+        .sla-breached { background:rgba(239,68,68,0.12); border-color:#ef4444; color:#ef4444; }
+        .sla-pending  { background:rgba(107,114,128,0.12); border-color:#6b7280; color:#6b7280; }
+        /* Severity */
+        .sev-critical { color:#ef4444; font-weight:800; }
+        .sev-high     { color:#f59e0b; font-weight:700; }
+        .sev-medium   { color:#eab308; }
+        .sev-low      { color:#3b82f6; }
+
+        /* Pagination */
+        .pagination { display:flex; justify-content:center; align-items:center; gap:0.5rem; padding:1rem 0; flex-shrink:0; }
+        .page-link { background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-muted); padding:0.4rem 0.9rem; border-radius:8px; cursor:pointer; font-size:0.85rem; transition:all 0.15s; text-decoration:none; }
+        .page-link:hover, .page-link.current { background:rgba(51,153,51,0.15); border-color:var(--accent-green); color:var(--accent-green); }
+
+        /* Modal */
+        .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); z-index:1000; justify-content:center; align-items:center; }
+        .modal-backdrop.open { display:flex; }
+        .modal-box { background:#0d1b2a; border:1px solid var(--glass-border); border-radius:20px; padding:2rem; width:100%; max-width:620px; box-shadow:0 25px 60px rgba(0,0,0,0.5); animation:modalIn 0.2s ease; max-height:90vh; overflow-y:auto; }
+        @keyframes modalIn { from { opacity:0; transform:scale(0.96) translateY(-10px); } to { opacity:1; transform:scale(1) translateY(0); } }
+        .modal-title { font-size:1.2rem; font-weight:800; color:var(--text-main); margin-bottom:1.5rem; display:flex; align-items:center; gap:0.7rem; }
+        .form-group { margin-bottom:1rem; }
+        .form-group label { display:block; color:var(--text-muted); font-size:0.82rem; margin-bottom:0.35rem; font-weight:600; }
+        .form-group input, .form-group select, .form-group textarea { width:100%; background:rgba(0,0,0,0.3); border:1px solid var(--glass-border); color:var(--text-main); padding:0.65rem 0.9rem; border-radius:10px; font-family:inherit; font-size:0.9rem; }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--accent-green); }
+        .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+        .span2 { grid-column:span 2; }
+
+        /* Messages */
+        .msg-success { background:rgba(51,153,51,0.12); border:1px solid var(--accent-green); color:var(--accent-green); padding:0.7rem 1rem; border-radius:10px; font-size:0.85rem; margin-bottom:0.8rem; }
+        .msg-error   { background:rgba(239,68,68,0.12); border:1px solid #ef4444; color:#ef4444; padding:0.7rem 1rem; border-radius:10px; font-size:0.85rem; margin-bottom:0.8rem; }
+    </style>
+</head>
+<body class="dashboard-page">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="font-size:1.2rem;font-weight:700;margin-bottom:2rem;padding-left:0.5rem;display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;">
+            <button class="header-toggle" onclick="toggleSidebar()"><i data-lucide="menu" style="width:20px;height:20px;"></i></button>
+            <span id="sidebar-title" style="opacity:0;transition:opacity 0.2s 0.1s ease;white-space:nowrap;visibility:hidden;">Network Monitor</span>
+        </div>
+        <a class="sidebar-btn" href="{% url 'dashboard' %}"><i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i><span>Dashboard</span></a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}"><i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i><span>Assets</span></a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}"><i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i><span>Network Map</span></a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}"><i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i><span>Security Logs</span></a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width: 20px; height: 20px; flex-shrink: 0;"></i><span>Alerts</span></a> #}
+        <a class="sidebar-btn active" href="{% url 'incident_response' %}"><i data-lucide="shield" style="width:20px;height:20px;flex-shrink:0;"></i><span>Incidents</span></a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}"><i data-lucide="radio" style="width:20px;height:20px;flex-shrink:0;"></i><span>Broadcast</span></a>
+        <a class="sidebar-btn" href="{% url 'vulnerability_list' %}"><i data-lucide="shield-x" style="width:20px;height:20px;flex-shrink:0;"></i><span>Vulnerabilities</span></a>
+        <a class="sidebar-btn" href="{% url 'settings' %}"><i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i><span>Settings</span></a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config"><i data-lucide="sliders" style="width:20px;height:20px;flex-shrink:0;"></i><span>Configuration</span></a>
+        {% endif %}
+        <div style="margin-top:auto;"><a href="{% url 'logout' %}" style="text-decoration:none;"><button class="sidebar-btn"><i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i><span>Exit</span></button></a></div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-wrapper">
+        <!-- Header -->
+        <div class="page-header">
+            <div class="page-title">
+                <i data-lucide="shield" style="width:28px;height:28px;"></i>
+                Incident Response Center
+            </div>
+            <div style="display:flex;gap:0.8rem;align-items:center;">
+                <a href="{% url 'api_incident_export_csv' %}" class="btn"><i data-lucide="download" style="width:16px;height:16px;"></i> Export CSV</a>
+                <a href="{% url 'api_incident_export_pdf' %}" class="btn"><i data-lucide="file-text" style="width:16px;height:16px;"></i> Export PDF</a>
+                <button class="btn btn-primary" onclick="openCreateModal()"><i data-lucide="plus" style="width:16px;height:16px;"></i> New Incident</button>
+            </div>
+        </div>
+
+        <!-- Broadcast tabs for navigation back -->
+        <div class="tabs">
+            <a class="tab-btn" href="{% url 'broadcast' %}" style="text-decoration:none;"><i data-lucide="activity" style="width:18px;height:18px;"></i> Watch Broadcasts</a>
+            <a class="tab-btn" href="{% url 'broadcast' %}#add" style="text-decoration:none;"><i data-lucide="plus-circle" style="width:18px;height:18px;"></i> Add Notes &amp; Broadcast</a>
+            <a class="tab-btn active" href="{% url 'incident_response' %}" style="text-decoration:none;"><i data-lucide="shield" style="width:18px;height:18px;"></i> Incident Response</a>
+        </div>
+
+        <!-- Django messages -->
+        {% for message in messages %}
+        <div class="msg-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+
+        <!-- Metric Cards -->
+        <div class="metrics-row">
+            <div class="metric-card red">
+                <div class="metric-icon"><i data-lucide="alert-triangle" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ active_count }}</div>
+                <div class="metric-label">Active Incidents</div>
+            </div>
+            <div class="metric-card red">
+                <div class="metric-icon"><i data-lucide="shield-alert" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ critical_open }}</div>
+                <div class="metric-label">Open Critical</div>
+            </div>
+            <div class="metric-card green">
+                <div class="metric-icon"><i data-lucide="check-circle" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ resolved_count }}</div>
+                <div class="metric-label">Resolved</div>
+            </div>
+            <div class="metric-card blue">
+                <div class="metric-icon"><i data-lucide="database" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ total_count }}</div>
+                <div class="metric-label">Total Incidents</div>
+            </div>
+            <div class="metric-card purple">
+                <div class="metric-icon"><i data-lucide="clock" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ mttr }}<span style="font-size:0.9rem;font-weight:500;"> min</span></div>
+                <div class="metric-label">MTTR</div>
+            </div>
+            <div class="metric-card green">
+                <div class="metric-icon"><i data-lucide="shield-check" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ sla_pct }}<span style="font-size:0.9rem;font-weight:500;">%</span></div>
+                <div class="metric-label">SLA Compliance</div>
+            </div>
+            <div class="metric-card orange">
+                <div class="metric-icon"><i data-lucide="x-circle" style="width:18px;height:18px;"></i></div>
+                <div class="metric-value">{{ sla_breached }}</div>
+                <div class="metric-label">SLA Breaches</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <form method="get" class="controls-row" id="filterForm">
+            <input type="text" name="q" value="{{ current_q }}" class="search-bar" placeholder="Search by ID, title, asset, IP...">
+            <select name="status" class="cyber-select" onchange="this.form.submit()">
+                <option value="">All Statuses</option>
+                <option value="New" {% if current_status == "New" %}selected{% endif %}>New</option>
+                <option value="Active" {% if current_status == "Active" %}selected{% endif %}>Active</option>
+                <option value="Acknowledged" {% if current_status == "Acknowledged" %}selected{% endif %}>Acknowledged</option>
+                <option value="Investigating" {% if current_status == "Investigating" %}selected{% endif %}>Investigating</option>
+                <option value="Resolved" {% if current_status == "Resolved" %}selected{% endif %}>Resolved</option>
+                <option value="Closed" {% if current_status == "Closed" %}selected{% endif %}>Closed</option>
+                <option value="Reopened" {% if current_status == "Reopened" %}selected{% endif %}>Reopened</option>
+            </select>
+            <select name="severity" class="cyber-select" onchange="this.form.submit()">
+                <option value="">All Severities</option>
+                <option value="Critical" {% if current_severity == "Critical" %}selected{% endif %}>🔴 Critical</option>
+                <option value="High"     {% if current_severity == "High" %}selected{% endif %}>🟠 High</option>
+                <option value="Medium"   {% if current_severity == "Medium" %}selected{% endif %}>🟡 Medium</option>
+                <option value="Low"      {% if current_severity == "Low" %}selected{% endif %}>🟢 Low</option>
+            </select>
+            <select name="sla" class="cyber-select" onchange="this.form.submit()">
+                <option value="">All SLA</option>
+                <option value="Met"      {% if current_sla == "Met" %}selected{% endif %}>SLA Met</option>
+                <option value="Breached" {% if current_sla == "Breached" %}selected{% endif %}>SLA Breached</option>
+                <option value="Pending"  {% if current_sla == "Pending" %}selected{% endif %}>SLA Pending</option>
+            </select>
+            <button type="submit" class="btn btn-primary"><i data-lucide="search" style="width:14px;height:14px;"></i> Filter</button>
+            <a href="{% url 'incident_response' %}" class="btn">Reset</a>
+        </form>
+
+        <!-- Table -->
+        <div class="table-wrapper">
+            <table id="incidentTable">
+                <thead>
+                    <tr>
+                        <th>Incident ID</th>
+                        <th>Title</th>
+                        <th>Asset</th>
+                        <th>IP Address</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Assigned To</th>
+                        <th>Started At</th>
+                        <th>Acknowledged At</th>
+                        <th>Resolved At</th>
+                        <th>Response (min)</th>
+                        <th>Resolution (min)</th>
+                        <th>SLA Target</th>
+                        <th>SLA Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for inc in page_obj %}
+                    <tr onclick="window.location.href='{% url 'incident_detail' inc.pk %}'" title="Click to view timeline">
+                        <td><span style="font-family:monospace;font-size:0.8rem;color:var(--accent-green);">{{ inc.incident_id }}</span></td>
+                        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ inc.title }}">{{ inc.title }}</td>
+                        <td style="color:var(--text-muted);">{{ inc.asset_name }}</td>
+                        <td style="font-family:monospace;font-size:0.82rem;">{{ inc.ip_address|default:"N/A" }}</td>
+                        <td>
+                            {% if inc.severity == "Critical" %}<span class="sev-critical">🔴 Critical</span>
+                            {% elif inc.severity == "High" %}<span class="sev-high">🟠 High</span>
+                            {% elif inc.severity == "Medium" %}<span class="sev-medium">🟡 Medium</span>
+                            {% else %}<span class="sev-low">🟢 Low</span>{% endif %}
+                        </td>
+                        <td>
+                            {% if inc.status == "New" %}<span class="badge badge-new">New</span>
+                            {% elif inc.status == "Active" %}<span class="badge badge-active">Active</span>
+                            {% elif inc.status == "Acknowledged" %}<span class="badge badge-acknowledged">Acknowledged</span>
+                            {% elif inc.status == "Investigating" %}<span class="badge badge-investigating">Investigating</span>
+                            {% elif inc.status == "Resolved" %}<span class="badge badge-resolved">Resolved</span>
+                            {% elif inc.status == "Reopened" %}<span class="badge badge-reopened">Reopened</span>
+                            {% else %}<span class="badge badge-closed">Closed</span>{% endif %}
+                        </td>
+                        <td style="color:var(--text-muted);">{{ inc.assigned_to.username|default:"Unassigned" }}</td>
+                        <td style="font-size:0.8rem;color:var(--text-muted);">{{ inc.started_at|date:"Y-m-d H:i" }}</td>
+                        <td style="font-size:0.8rem;color:var(--text-muted);">{{ inc.acknowledged_at|date:"Y-m-d H:i"|default:"—" }}</td>
+                        <td style="font-size:0.8rem;color:var(--text-muted);">{{ inc.resolved_at|date:"Y-m-d H:i"|default:"—" }}</td>
+                        <td style="text-align:center;">{% if inc.response_time_minutes is not None %}{{ inc.response_time_minutes }}{% else %}—{% endif %}</td>
+                        <td style="text-align:center;">{% if inc.resolution_time_minutes is not None %}{{ inc.resolution_time_minutes }}{% else %}—{% endif %}</td>
+                        <td style="text-align:center;color:var(--text-muted);">{{ inc.sla_target_minutes }} min</td>
+                        <td>
+                            {% with sla=inc.sla_status %}
+                            {% if sla == "Met" %}<span class="badge sla-met">Met</span>
+                            {% elif sla == "Breached" %}<span class="badge sla-breached">Breached</span>
+                            {% else %}<span class="badge sla-pending">Pending</span>{% endif %}
+                            {% endwith %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="14" style="text-align:center;padding:3rem;color:var(--text-muted);">
+                            <i data-lucide="shield-check" style="width:40px;height:40px;margin:0 auto 1rem;display:block;opacity:0.3;"></i>
+                            No incidents found. Click <strong>+ New Incident</strong> to create one.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="pagination">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&sla={{ current_sla }}&sort_by={{ current_sort_by }}" class="page-link">← Prev</a>
+            {% endif %}
+            <span style="color:var(--text-muted);font-size:0.85rem;">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&sla={{ current_sla }}&sort_by={{ current_sort_by }}" class="page-link">Next →</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Create Incident Modal -->
+    <div class="modal-backdrop" id="createModal" onclick="closeOnBackdrop(event)">
+        <div class="modal-box">
+            <div class="modal-title"><i data-lucide="shield-plus" style="width:22px;height:22px;color:var(--accent-green);"></i> Create New Incident</div>
+            <form method="post" action="{% url 'incident_create' %}">
+                {% csrf_token %}
+                <div class="form-grid">
+                    <div class="form-group span2">
+                        <label>Incident Title *</label>
+                        <input type="text" name="title" required placeholder="e.g. Suspicious login from external IP">
+                    </div>
+                    <div class="form-group">
+                        <label>Asset Name</label>
+                        <input type="text" name="asset_name" placeholder="e.g. Critical Server">
+                    </div>
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" name="ip_address" placeholder="e.g. 192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label>Severity</label>
+                        <select name="severity" class="cyber-select" style="width:100%;">
+                            <option value="Critical">🔴 Critical (SLA: 30 min)</option>
+                            <option value="High">🟠 High (SLA: 60 min)</option>
+                            <option value="Medium" selected>🟡 Medium (SLA: 4 hr)</option>
+                            <option value="Low">🟢 Low (SLA: 8 hr)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Initial Status</label>
+                        <select name="status" class="cyber-select" style="width:100%;">
+                            <option value="New">New</option>
+                            <option value="Active">Active</option>
+                            <option value="Investigating">Investigating</option>
+                        </select>
+                    </div>
+                    <div class="form-group span2">
+                        <label>Assign To</label>
+                        <select name="assigned_to" class="cyber-select" style="width:100%;">
+                            <option value="">Unassigned</option>
+                            {% for u in users %}<option value="{{ u.pk }}">{{ u.username }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group span2">
+                        <label>Link to Active Alert (optional)</label>
+                        <select name="alert_event_id" class="cyber-select" style="width:100%;">
+                            <option value="">None</option>
+                            {% for ae in alert_events %}
+                            <option value="{{ ae.pk }}">[{{ ae.severity }}] {{ ae.ip_address|default:"System" }} — {{ ae.alert_type }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group span2">
+                        <label>Target Resolution Date & Time</label>
+                        <input type="datetime-local" name="due_date" style="width:100%;">
+                    </div>
+                    <div class="form-group span2">
+                        <label>Notes / Description</label>
+                        <textarea name="notes" rows="4" placeholder="Describe the incident, initial findings, affected systems..."></textarea>
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;margin-top:0.5rem;">
+                    <button type="submit" class="btn btn-primary"><i data-lucide="plus" style="width:16px;height:16px;"></i> Create Incident</button>
+                    <button type="button" class="btn" onclick="closeCreateModal()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebarExpanded = !sidebarExpanded;
+            sidebar.classList.toggle('expanded', sidebarExpanded);
+            const title = document.getElementById('sidebar-title');
+            if (sidebarExpanded) { title.style.visibility='visible'; title.style.opacity='1'; }
+            else { title.style.opacity='0'; setTimeout(() => { if(!sidebarExpanded) title.style.visibility='hidden'; }, 200); }
+        }
+        function openCreateModal() {
+            document.getElementById('createModal').classList.add('open');
+        }
+        function closeCreateModal() {
+            document.getElementById('createModal').classList.remove('open');
+        }
+        function closeOnBackdrop(e) {
+            if(e.target === document.getElementById('createModal')) closeCreateModal();
+        }
+        // Open modal if there's a validation error message
+        {% if messages %}
+        {% for message in messages %}
+        {% if "required" in message.message %}openCreateModal();{% endif %}
+        {% endfor %}
+        {% endif %}
+    </script>
+</body>
+</html>

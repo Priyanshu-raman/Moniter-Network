@@ -1,0 +1,494 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerts History — Monitor OS</title>
+    <meta name="description" content="Permanent audit trail for system and network alerts.">
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .alerts-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .alerts-page::before {
+            content: ''; position: absolute;
+            width: 700px; height: 700px; border-radius: 50%;
+            background: var(--accent-red); filter: blur(140px); opacity: 0.05;
+            top: -200px; right: -200px; pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(239,68,68,0.3); }
+        .sidebar-btn.active { background: rgba(239,68,68,0.1); border-color: var(--accent-red); color: var(--accent-red); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-red); color: var(--accent-red); }
+
+        /* ── Main layout ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 5rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; width: 100%;
+        }
+        .page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 1rem;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-red); }
+
+        .header-controls {
+            display: flex; gap: 0.8rem; flex-wrap: wrap;
+        }
+
+        /* ── Metric Cards ── */
+        .metrics-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem;
+        }
+        .metric-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border); border-radius: 18px;
+            padding: 1.25rem 1.5rem; display: flex; align-items: center; gap: 1.2rem;
+            box-shadow: var(--glass-shadow); backdrop-filter: var(--glass-blur);
+        }
+        .metric-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .metric-info { display: flex; flex-direction: column; gap: 0.2rem; }
+        .metric-value { font-size: 1.5rem; font-weight: 800; color: var(--text-main); }
+        .metric-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+
+        /* Colors */
+        .bg-red { background: rgba(239,68,68,0.12); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.25); }
+        .bg-green { background: rgba(51,153,51,0.12); color: var(--accent-green); border: 1px solid rgba(51,153,51,0.25); }
+        .bg-orange { background: rgba(245,166,35,0.12); color: var(--accent-orange); border: 1px solid rgba(245,166,35,0.25); }
+        .bg-blue { background: rgba(59,130,246,0.12); color: var(--accent-blue); border: 1px solid rgba(59,130,246,0.25); }
+
+        /* ── Filter & Search Control Panel ── */
+        .control-panel {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 20px; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;
+            box-shadow: var(--glass-shadow); backdrop-filter: var(--glass-blur);
+        }
+        .control-row {
+            display: flex; gap: 1rem; flex-wrap: wrap; align-items: center;
+        }
+        .search-wrapper { position: relative; flex: 1; min-width: 280px; }
+        .search-input {
+            width: 100%; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 0.75rem 1rem 0.75rem 2.5rem; color: var(--text-main);
+            outline: none; font-size: 0.9rem; transition: all 0.15s ease;
+        }
+        .search-input:focus { border-color: var(--accent-red); background: rgba(239,68,68,0.02); }
+        .search-icon { position: absolute; left: 0.9rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; }
+
+        .select-filter {
+            background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border);
+            border-radius: 12px; padding: 0.75rem 2rem 0.75rem 1rem; color: var(--text-main);
+            outline: none; font-size: 0.88rem; cursor: pointer; min-width: 160px;
+            appearance: none; -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 1rem center;
+        }
+        .select-filter option { background: #11151c; color: var(--text-main); }
+
+        /* ── Table & Translucent Glass ── */
+        .table-container {
+            background: var(--glass-bg); border: 1px solid var(--glass-border);
+            border-radius: 20px; overflow-x: auto; box-shadow: var(--glass-shadow);
+            backdrop-filter: var(--glass-blur);
+        }
+        .alerts-table { width: 100%; min-width: 1200px; border-collapse: collapse; text-align: left; }
+        .alerts-table th {
+            padding: 1.1rem 1.5rem; font-size: 0.78rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted);
+            border-bottom: 1px solid var(--glass-border); background: rgba(255,255,255,0.01);
+        }
+        .alerts-table td {
+            padding: 1.1rem 1.5rem; font-size: 0.9rem; border-bottom: 1px solid var(--glass-border);
+            color: var(--text-main); vertical-align: middle;
+        }
+        .alerts-table tr:last-child td { border-bottom: none; }
+        .alerts-table tr:hover td { background: rgba(255,255,255,0.015); }
+
+        /* Status & Severity badges */
+        .badge {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 0.3rem 0.7rem; border-radius: 50px; font-size: 0.75rem; font-weight: 700;
+        }
+        .badge-critical { background: rgba(239,68,68,0.12); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.25); }
+        .badge-high { background: rgba(245,166,35,0.12); color: var(--accent-orange); border: 1px solid rgba(245,166,35,0.25); }
+        .badge-medium { background: rgba(250,219,20,0.12); color: #fadb14; border: 1px solid rgba(250,219,20,0.25); }
+        .badge-low { background: rgba(51,153,51,0.12); color: var(--accent-green); border: 1px solid rgba(51,153,51,0.25); }
+
+        .status-active { color: var(--accent-red); font-weight: bold; }
+        .status-resolved { color: var(--accent-green); font-weight: bold; }
+        .status-suppressed { color: var(--text-muted); font-style: italic; }
+
+        /* ── Pagination ── */
+        .pagination {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 1.5rem; border-top: 1px solid var(--glass-border);
+        }
+        .page-link {
+            padding: 0.5rem 1rem; border-radius: 8px; border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.02); color: var(--text-main); text-decoration: none;
+            font-size: 0.82rem; transition: all 0.15s ease;
+        }
+        .page-link:hover { border-color: var(--accent-red); background: rgba(239,68,68,0.05); color: var(--accent-red); }
+        .page-info { font-size: 0.82rem; color: var(--text-muted); }
+
+        /* ── Action Buttons ── */
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.65rem 1.25rem; border-radius: 10px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+            color: var(--accent-red); font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-primary:hover { background: rgba(239,68,68,0.18); border-color: var(--accent-red); }
+
+        .btn-ghost {
+            display: inline-flex; align-items: center; gap: 0.4rem;
+            padding: 0.65rem 1.25rem; border-radius: 10px;
+            background: transparent; border: 1px solid var(--glass-border);
+            color: var(--text-muted); font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; transition: all 0.15s ease;
+            text-decoration: none; font-family: 'Inter', sans-serif;
+        }
+        .btn-ghost:hover { border-color: var(--accent-red); color: var(--accent-red); }
+
+        @media (max-width: 900px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .control-row { flex-direction: column; align-items: stretch; }
+        }
+        @media (max-width: 600px) {
+            .metrics-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body class="alerts-page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}" id="nav-dashboard">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'asset_list' %}" id="nav-assets">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" id="nav-account">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}" id="nav-map">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}" id="nav-logs">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'alerts_history' %}" id="nav-alerts">
+            <i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Alerts</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}" id="nav-settings">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+        <div class="page-header">
+            <div class="page-title">
+                <i data-lucide="bell" style="width:28px;height:28px;"></i>
+                Alert History Trail
+            </div>
+
+            <div class="header-controls">
+                <a class="btn-ghost" href="{% url 'alerts_export_csv' %}?q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&source={{ current_source }}"><i data-lucide="download" style="width:15px;height:15px;"></i> Export CSV</a>
+                <a class="btn-ghost" href="{% url 'alerts_export_pdf' %}?q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&source={{ current_source }}" target="_blank"><i data-lucide="file-text" style="width:15px;height:15px;"></i> Export PDF</a>
+            </div>
+        </div>
+
+        <!-- Metrics Cards Grid -->
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-icon bg-red">
+                    <i data-lucide="alert-triangle"></i>
+                </div>
+                <div class="metric-info">
+                    <span class="metric-value">{{ active_count }}</span>
+                    <span class="metric-label">Active Alerts</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon bg-green">
+                    <i data-lucide="check-circle"></i>
+                </div>
+                <div class="metric-info">
+                    <span class="metric-value">{{ resolved_count }}</span>
+                    <span class="metric-label">Resolved Alerts</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon bg-orange">
+                    <i data-lucide="shield-off"></i>
+                </div>
+                <div class="metric-info">
+                    <span class="metric-value">{{ suppressed_count }}</span>
+                    <span class="metric-label">Suppressed Alerts</span>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon bg-blue">
+                    <i data-lucide="bar-chart-2"></i>
+                </div>
+                <div class="metric-info">
+                    <span class="metric-value">{{ total_count }}</span>
+                    <span class="metric-label">Total Logs</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filter Control Panel -->
+        <form method="GET" class="control-panel">
+            <div class="control-row">
+                <div class="search-wrapper">
+                    <i data-lucide="search" class="search-icon" style="width:18px;height:18px;"></i>
+                    <input type="text" name="q" value="{{ current_q }}" placeholder="Search by IP, message, asset name..." class="search-input">
+                </div>
+
+                <select name="status" class="select-filter" onchange="this.form.submit()">
+                    <option value="">All Statuses</option>
+                    <option value="Active" {% if current_status == "Active" %}selected{% endif %}>Active</option>
+                    <option value="Resolved" {% if current_status == "Resolved" %}selected{% endif %}>Resolved</option>
+                    <option value="Suppressed" {% if current_status == "Suppressed" %}selected{% endif %}>Suppressed</option>
+                </select>
+
+                <select name="severity" class="select-filter" onchange="this.form.submit()">
+                    <option value="">All Severities</option>
+                    <option value="Critical" {% if current_severity == "Critical" %}selected{% endif %}>Critical 🔴</option>
+                    <option value="High" {% if current_severity == "High" %}selected{% endif %}>High 🟠</option>
+                    <option value="Medium" {% if current_severity == "Medium" %}selected{% endif %}>Medium 🟡</option>
+                    <option value="Low" {% if current_severity == "Low" %}selected{% endif %}>Low 🟢</option>
+                </select>
+
+                <select name="source" class="select-filter" onchange="this.form.submit()">
+                    <option value="">All Sources</option>
+                    <option value="Scanner" {% if current_source == "Scanner" %}selected{% endif %}>Scanner</option>
+                    <option value="Manual" {% if current_source == "Manual" %}selected{% endif %}>Manual</option>
+                </select>
+
+                <select name="sort_by" class="select-filter" onchange="this.form.submit()">
+                    <option value="-created_at" {% if current_sort_by == "-created_at" %}selected{% endif %}>Date (Newest)</option>
+                    <option value="created_at" {% if current_sort_by == "created_at" %}selected{% endif %}>Date (Oldest)</option>
+                    <option value="-severity" {% if current_sort_by == "-severity" %}selected{% endif %}>Severity (High-Low)</option>
+                    <option value="severity" {% if current_sort_by == "severity" %}selected{% endif %}>Severity (Low-High)</option>
+                    <option value="ip_address" {% if current_sort_by == "ip_address" %}selected{% endif %}>IP Address</option>
+                    <option value="-occurrence_count" {% if current_sort_by == "-occurrence_count" %}selected{% endif %}>Occurrences</option>
+                    <option value="-downtime" {% if current_sort_by == "-downtime" %}selected{% endif %}>Downtime Duration</option>
+                </select>
+
+                <button type="submit" class="btn-primary">Apply Filters</button>
+                <a href="{% url 'alerts_history' %}" class="btn-ghost" style="padding: 0.75rem 1.25rem;">Reset</a>
+            </div>
+        </form>
+
+        <!-- Alerts Table Grid -->
+        <div class="table-container">
+            <table class="alerts-table">
+                <thead>
+                    <tr>
+                        <th style="width: 70px;">ID</th>
+                        <th style="width: 140px;">IP Address</th>
+                        <th style="width: 130px;">Asset Name</th>
+                        <th style="width: 100px;">Severity</th>
+                        <th>Alert Message</th>
+                        <th style="width: 110px;">Status</th>
+                        <th style="width: 80px; text-align:center;">Count</th>
+                        <th style="width: 130px;">Created At</th>
+                        <th style="width: 130px;">Resolved At</th>
+                        <th style="width: 110px; text-align:center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for alert in page_obj %}
+                    <tr>
+                        <td><strong>#{{ alert.id }}</strong></td>
+                        <td>
+                            {% if alert.ip_address %}
+                            <span style="font-family: monospace; font-weight:600; color:var(--accent-blue);">{{ alert.ip_address }}</span>
+                            {% else %}
+                            <span style="color:var(--text-muted);">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td><span style="font-weight:600;">{{ alert.asset_name }}</span></td>
+                        <td>
+                            {% if alert.severity == "Critical" %}
+                            <span class="badge badge-critical">Critical</span>
+                            {% elif alert.severity == "High" %}
+                            <span class="badge badge-high">High</span>
+                            {% elif alert.severity == "Medium" %}
+                            <span class="badge badge-medium">Medium</span>
+                            {% else %}
+                            <span class="badge badge-low">Low</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div style="font-weight:500;">{{ alert.message }}</div>
+                            {% if alert.downtime_duration %}
+                            <div style="font-size:0.75rem; color:var(--accent-orange); font-weight:700; margin-top:4px;">
+                                <i data-lucide="clock" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:2px;"></i>
+                                Downtime: {{ alert.downtime_duration }}
+                            </div>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if alert.status == "Active" %}
+                            <span class="status-active"><i data-lucide="alert-circle" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>Active</span>
+                            {% elif alert.status == "Resolved" %}
+                            <span class="status-resolved"><i data-lucide="check" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>Resolved</span>
+                            {% else %}
+                            <span class="status-suppressed"><i data-lucide="shield-alert" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i>Suppressed ({{ alert.suppression_count }})</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align:center;"><span style="font-weight:700;">{{ alert.occurrence_count }}</span></td>
+                        <td style="font-size:0.8rem; color:var(--text-muted);">{{ alert.created_at|date:"Y-m-d H:i:s" }}</td>
+                        <td style="font-size:0.8rem; color:var(--text-muted);">
+                            {% if alert.resolved_at %}
+                            {{ alert.resolved_at|date:"Y-m-d H:i:s" }}
+                            {% else %}
+                            <span style="color:var(--text-muted); font-style:italic;">Ongoing</span>
+                            {% endif %}
+                        </td>
+                        <td style="text-align:center;">
+                            {% if alert.status in "New Active Acknowledged Investigating" %}
+                            <a href="{% url 'api_resolve_alert' alert.id %}" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem; border-radius:6px;">Resolve</a>
+                            {% else %}
+                            <span style="color:var(--text-muted); font-size:0.8rem;">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="10" style="text-align: center; color: var(--text-muted); padding: 3rem;">
+                            <i data-lucide="bell-off" style="width:36px; height:36px; margin-bottom:1rem; opacity:0.5;"></i>
+                            <br>No alerts logged matching your query.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Pagination Row -->
+            {% if page_obj.has_other_pages %}
+            <div class="pagination">
+                <span class="page-info">
+                    Showing {{ page_obj.start_index }} to {{ page_obj.end_index }} of {{ page_obj.paginator.count }} logs
+                </span>
+                <div style="display:flex; gap:0.5rem;">
+                    {% if page_obj.has_previous %}
+                    <a href="?page=1&q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&source={{ current_source }}&sort_by={{ current_sort_by }}" class="page-link">First</a>
+                    <a href="?page={{ page_obj.previous_page_number }}&q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&source={{ current_source }}&sort_by={{ current_sort_by }}" class="page-link">Previous</a>
+                    {% endif %}
+
+                    {% if page_obj.has_next %}
+                    <a href="?page={{ page_obj.next_page_number }}&q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&source={{ current_source }}&sort_by={{ current_sort_by }}" class="page-link">Next</a>
+                    <a href="?page={{ page_obj.paginator.num_pages }}&q={{ current_q }}&status={{ current_status }}&severity={{ current_severity }}&source={{ current_source }}&sort_by={{ current_sort_by }}" class="page-link">Last</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // ── Sidebar Toggle ───────────────────────────────────────────
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title   = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity    = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+    </script>
+</body>
+
+</html>

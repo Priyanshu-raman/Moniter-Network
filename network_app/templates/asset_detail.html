@@ -1,0 +1,541 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Details: {{ asset.asset_name }} — Monitor OS</title>
+    <link rel="stylesheet" href="{% static 'css/index.css' %}">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        html, body { overflow-y: auto !important; height: auto !important; }
+
+        .asset-detail-page {
+            display: flex; width: 100%; min-height: 100vh;
+            background: var(--bg-deep); position: relative; overflow-x: hidden;
+        }
+        .asset-detail-page::before {
+            content: ''; position: absolute;
+            width: 700px; height: 700px; border-radius: 50%;
+            background: var(--accent-blue); filter: blur(140px); opacity: 0.05;
+            top: -200px; right: -200px; pointer-events: none; z-index: 0;
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            width: 80px; min-width: 80px; height: 100vh; position: sticky; top: 0;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border-right: 1px solid var(--glass-border); box-shadow: var(--glass-shadow);
+            z-index: 100; padding: 2.5rem 0.75rem;
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow: hidden; transition: width 0.2s ease;
+        }
+        .sidebar.expanded { width: 220px; min-width: 220px; }
+        .sidebar-btn {
+            background: transparent; color: var(--text-main);
+            border: 1px solid transparent; padding: 1rem; border-radius: 16px;
+            font-weight: 500; text-align: left; cursor: pointer;
+            transition: all 0.15s ease; font-size: 0.95rem;
+            display: flex; align-items: center; gap: 1.25rem;
+            width: 100%; overflow: hidden; white-space: nowrap; text-decoration: none;
+        }
+        .sidebar-btn span { opacity: 0; transition: opacity 0.15s ease; }
+        .sidebar.expanded .sidebar-btn span { opacity: 1; }
+        .sidebar-btn:hover { background: var(--glass-bg-hover); border-color: rgba(74,144,226,0.3); }
+        .sidebar-btn.active { background: rgba(74,144,226,0.12); border-color: var(--accent-blue); color: var(--accent-blue); }
+        .header-toggle {
+            display: flex; align-items: center; justify-content: center;
+            width: 50px; height: 50px; border-radius: 14px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); cursor: pointer; transition: all 0.15s ease; flex-shrink: 0;
+        }
+        .header-toggle:hover { background: var(--glass-bg-hover); border-color: var(--accent-blue); color: var(--accent-blue); }
+
+        /* ── Main layout ── */
+        .main-wrapper {
+            flex: 1; padding: 2rem 2.5rem 5rem;
+            display: flex; flex-direction: column; gap: 2rem;
+            position: relative; z-index: 1; width: 100%; max-width: 1100px;
+        }
+        .page-header {
+            display: flex; align-items: center; justify-content: space-between;
+            flex-wrap: wrap; gap: 1.5rem;
+        }
+        .page-title {
+            font-size: 1.8rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 1rem;
+        }
+        .page-title i { color: var(--accent-blue); }
+
+        /* ── Action buttons ── */
+        .btn-primary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.7rem 1.4rem; border-radius: 12px;
+            background: rgba(74,144,226,0.12); border: 1px solid rgba(74,144,226,0.4);
+            color: var(--accent-blue); font-weight: 700; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-primary:hover { background: rgba(74,144,226,0.22); border-color: var(--accent-blue); }
+        
+        .btn-secondary {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.7rem 1.4rem; border-radius: 12px;
+            background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+            color: var(--text-main); font-weight: 600; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-secondary:hover { background: var(--glass-bg-hover); border-color: var(--text-muted); }
+
+        .btn-danger {
+            display: inline-flex; align-items: center; gap: 0.5rem;
+            padding: 0.7rem 1.4rem; border-radius: 12px;
+            background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.3);
+            color: var(--accent-red); font-weight: 700; font-size: 0.88rem;
+            cursor: pointer; transition: all 0.15s ease; text-decoration: none;
+        }
+        .btn-danger:hover { background: rgba(239,68,68,0.18); }
+
+        /* ── Detail layout ── */
+        .detail-grid {
+            display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 2rem;
+        }
+
+        /* ── Cards ── */
+        .detail-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border); border-radius: 24px;
+            box-shadow: var(--glass-shadow); overflow: hidden;
+            display: flex; flex-direction: column; gap: 1.5rem; padding: 2rem;
+        }
+        .card-title {
+            font-size: 1.1rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 0.8rem; margin-bottom: 0.5rem;
+        }
+        
+        /* ── Info layout ── */
+        .info-row {
+            display: grid; grid-template-columns: 1fr 1.5fr; padding: 0.8rem 0;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+        .info-value { font-size: 0.95rem; font-weight: 600; color: var(--text-main); }
+        .info-value.monospace { font-family: monospace; font-size: 0.9rem; }
+
+        /* ── Business Impact Glow Panel ── */
+        .impact-card {
+            background: rgba(17, 25, 35, 0.45);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px; box-shadow: var(--glass-shadow);
+            padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem;
+            position: relative;
+        }
+        
+        /* Neon indicators */
+        .impact-card.Critical { border-top: 4px solid var(--accent-red); box-shadow: 0 10px 40px rgba(211,74,74,0.08); }
+        .impact-card.High { border-top: 4px solid var(--accent-orange); box-shadow: 0 10px 40px rgba(245,166,35,0.06); }
+        .impact-card.Medium { border-top: 4px solid #e5c158; box-shadow: 0 10px 40px rgba(229,193,88,0.04); }
+        .impact-card.Low { border-top: 4px solid var(--accent-green); box-shadow: 0 10px 40px rgba(51,153,51,0.04); }
+
+        .progress-bar-bg {
+            background: rgba(255,255,255,0.05); height: 10px; border-radius: 50px;
+            overflow: hidden; width: 100%; margin-top: 0.5rem;
+        }
+        .progress-bar-fill {
+            height: 100%; border-radius: 50px; transition: width 0.8s ease-out;
+        }
+        .Critical .progress-bar-fill { background: var(--accent-red); box-shadow: 0 0 10px var(--accent-red); }
+        .High .progress-bar-fill { background: var(--accent-orange); box-shadow: 0 0 8px var(--accent-orange); }
+        .Medium .progress-bar-fill { background: #e5c158; }
+        .Low .progress-bar-fill { background: var(--accent-green); }
+
+        .risk-badge {
+            display: inline-flex; align-items: center; gap: 8px;
+            padding: 0.5rem 1.25rem; border-radius: 50px;
+            font-size: 0.88rem; font-weight: 800; text-transform: uppercase;
+            letter-spacing: 0.8px; margin-top: 0.5rem;
+        }
+        .Critical .risk-badge { background: rgba(211,74,74,0.12); border: 1px solid var(--accent-red); color: var(--accent-red); }
+        .High .risk-badge { background: rgba(245,166,35,0.12); border: 1px solid var(--accent-orange); color: var(--accent-orange); }
+        .Medium .risk-badge { background: rgba(229,193,88,0.08); border: 1px solid #e5c158; color: #e5c158; }
+        .Low .risk-badge { background: rgba(51,153,51,0.12); border: 1px solid var(--accent-green); color: var(--accent-green); }
+
+        .badge-crit {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 0.28rem 0.75rem; border-radius: 50px;
+            font-size: 0.72rem; font-weight: 700;
+        }
+        .badge-crit.critical { background: rgba(211,74,74,0.1); border: 1px solid rgba(211,74,74,0.3); color: var(--accent-red); }
+        .badge-crit.high { background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.3); color: var(--accent-orange); }
+        .badge-crit.medium { background: rgba(229,193,88,0.08); border: 1px solid rgba(229,193,88,0.2); color: #e5c158; }
+        .badge-crit.low { background: rgba(51,153,51,0.1); border: 1px solid rgba(51,153,51,0.3); color: var(--accent-green); }
+
+        .status-pill {
+            font-size: 0.88rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%;
+        }
+
+        /* ── Modal overlay ── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+            backdrop-filter: blur(6px); z-index: 9000;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-box {
+            background: #111923; border: 1px solid var(--glass-border);
+            border-radius: 24px; padding: 2.2rem; width: 100%; max-width: 440px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6);
+            transform: translateY(20px); transition: transform 0.2s ease;
+        }
+        .modal-overlay.active .modal-box { transform: translateY(0); }
+        .modal-title {
+            font-size: 1.15rem; font-weight: 800; color: var(--text-main);
+            display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+        }
+
+        @media (max-width: 900px) {
+            .detail-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body class="asset-detail-page">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div style="display:flex;align-items:center;gap:20px;overflow:hidden;height:60px;padding:0 0.5rem;margin-bottom:2rem;">
+            <button class="header-toggle" onclick="toggleSidebar()">
+                <i data-lucide="menu" style="width:20px;height:20px;"></i>
+            </button>
+            <span id="sidebar-title" style="opacity:0;visibility:hidden;transition:opacity 0.2s ease;white-space:nowrap;font-weight:700;font-size:1.1rem;">
+                Network Monitor
+            </span>
+        </div>
+
+        <a class="sidebar-btn" href="{% url 'dashboard' %}" id="nav-dashboard">
+            <i data-lucide="layout-dashboard" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Dashboard</span>
+        </a>
+        <a class="sidebar-btn active" href="{% url 'asset_list' %}" id="nav-assets">
+            <i data-lucide="package" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Assets</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'account' %}" id="nav-account">
+            <i data-lucide="user" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>My Account</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'network_map' %}" id="nav-map">
+            <i data-lucide="network" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Network Map</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'security_logs' %}" id="nav-logs">
+            <i data-lucide="shield-alert" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Security Logs</span>
+        </a>
+        {# ALERTS — commented out, work in progress #}
+        {# <a class="sidebar-btn" href="{% url 'alerts_history' %}" id="nav-alerts"><i data-lucide="bell" style="width:20px;height:20px;flex-shrink:0;"></i><span>Alerts</span></a> #}
+        <a class="sidebar-btn" href="{% url 'broadcast' %}">
+            <i data-lucide="radio" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Broadcast</span>
+        </a>
+        <a class="sidebar-btn" href="{% url 'settings' %}" id="nav-settings">
+            <i data-lucide="settings" style="width:20px;height:20px;flex-shrink:0;"></i>
+            <span>Settings</span>
+        </a>
+        {% if user.is_superuser or user.is_staff %}
+        <a class="sidebar-btn" href="{% url 'config' %}" id="nav-config">
+            <i data-lucide="sliders" style="width: 20px; height: 20px; flex-shrink: 0;"></i>
+            <span>Configuration</span>
+        </a>
+        {% endif %}
+
+        <div style="margin-top:auto;">
+            <a href="{% url 'logout' %}" class="sidebar-btn">
+                <i data-lucide="log-out" style="width:20px;height:20px;flex-shrink:0;"></i>
+                <span>Logout</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-wrapper">
+        <header class="page-header">
+            <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                <a href="{% url 'asset_list' %}" style="display:inline-flex; align-items:center; gap:5px; color:var(--text-muted); text-decoration:none; font-size:0.85rem; font-weight:600;">
+                    <i data-lucide="arrow-left" style="width:14px;height:14px;"></i> Back to Inventory
+                </a>
+                <div class="page-title">
+                    <i data-lucide="package" style="width:28px;height:28px;"></i>
+                    {{ asset.asset_name }}
+                </div>
+            </div>
+            
+            <div style="display:flex; gap:0.75rem;">
+                {% if can_edit %}
+                <a href="{% url 'asset_edit' asset.pk %}" class="btn-primary">
+                    <i data-lucide="pencil" style="width:16px;height:16px;"></i> Edit Asset
+                </a>
+                {% endif %}
+                {% if is_admin %}
+                <button type="button" class="btn-danger" onclick="openDeleteModal()">
+                    <i data-lucide="trash-2" style="width:16px;height:16px;"></i> Delete Asset
+                </button>
+                {% endif %}
+            </div>
+        </header>
+
+        <div class="detail-grid">
+            <!-- Left Column: Overview and Technical Details -->
+            <div style="display:flex; flex-direction:column; gap:2rem;">
+                <!-- Overview -->
+                <div class="detail-card">
+                    <div class="card-title">
+                        <i data-lucide="info" style="color:var(--accent-blue); width:18px; height:18px;"></i>
+                        Asset Overview
+                    </div>
+                    
+                    <div style="display:flex; flex-direction:column;">
+                        <div class="info-row">
+                            <span class="info-label">Name</span>
+                            <span class="info-value">{{ asset.asset_name }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Type</span>
+                            <span class="info-value">{{ asset.asset_type }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Status</span>
+                            <span class="info-value">
+                                {% if asset.status == 'Active' %}
+                                    <span class="status-pill" style="color:var(--accent-green);">
+                                        <span class="status-dot" style="background:var(--accent-green); box-shadow:0 0 6px var(--accent-green);"></span> Active
+                                    </span>
+                                {% elif asset.status == 'Inactive' %}
+                                    <span class="status-pill" style="color:var(--accent-red);">
+                                        <span class="status-dot" style="background:var(--accent-red);"></span> Inactive
+                                    </span>
+                                {% elif asset.status == 'Maintenance' %}
+                                    <span class="status-pill" style="color:var(--accent-orange);">
+                                        <span class="status-dot" style="background:var(--accent-orange);"></span> Under Maintenance
+                                    </span>
+                                {% else %}
+                                    <span class="status-pill" style="color:var(--text-muted);">
+                                        <span class="status-dot" style="background:var(--text-muted);"></span> Decommissioned
+                                    </span>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Department</span>
+                            <span class="info-value">{{ asset.department }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Location</span>
+                            <span class="info-value">{{ asset.location }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Business Unit</span>
+                            <span class="info-value">{{ asset.business_unit }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Owner Name</span>
+                            <span class="info-value">{{ asset.owner_name }}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Owner Email</span>
+                            <span class="info-value"><a href="mailto:{{ asset.owner_email }}" style="color:var(--accent-blue); text-decoration:none;">{{ asset.owner_email }}</a></span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Contact Number</span>
+                            <span class="info-value">{{ asset.owner_contact|default:"—" }}</span>
+                        </div>
+                        {% if asset.description %}
+                        <div class="info-row" style="grid-template-columns:1fr; gap:0.4rem; padding-top:1.2rem;">
+                            <span class="info-label">Description</span>
+                            <span style="font-size:0.9rem; color:var(--text-muted); line-height:1.5; white-space:pre-wrap;">{{ asset.description }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Technical Details -->
+                <div class="detail-card">
+                    <div class="card-title">
+                        <i data-lucide="cpu" style="color:var(--accent-blue); width:18px; height:18px;"></i>
+                        Technical Specifications
+                    </div>
+                    
+                    <div style="display:flex; flex-direction:column;">
+                        <div class="info-row">
+                            <span class="info-label">IP Address</span>
+                            <span class="info-value monospace">{% if asset.ip_address %}{{ asset.ip_address }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">MAC Address</span>
+                            <span class="info-value monospace">{% if asset.mac_address %}{{ asset.mac_address }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Operating System</span>
+                            <span class="info-value">{% if asset.operating_system %}{{ asset.operating_system }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Vendor / Manufacturer</span>
+                            <span class="info-value">{% if asset.vendor %}{{ asset.vendor }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Model</span>
+                            <span class="info-value">{% if asset.model %}{{ asset.model }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Serial Number</span>
+                            <span class="info-value monospace">{% if asset.serial_number %}{{ asset.serial_number }}{% else %}—{% endif %}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warranty and Purchase -->
+                <div class="detail-card">
+                    <div class="card-title">
+                        <i data-lucide="calendar" style="color:var(--accent-blue); width:18px; height:18px;"></i>
+                        Lifecycle &amp; Purchase Information
+                    </div>
+                    
+                    <div style="display:flex; flex-direction:column;">
+                        <div class="info-row">
+                            <span class="info-label">Purchase Date</span>
+                            <span class="info-value">{% if asset.purchase_date %}{{ asset.purchase_date }}{% else %}—{% endif %}</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label">Warranty Expiry</span>
+                            <span class="info-value">{% if asset.warranty_expiry %}{{ asset.warranty_expiry }}{% else %}—{% endif %}</span>
+                        </div>
+                        {% if asset.notes %}
+                        <div class="info-row" style="grid-template-columns:1fr; gap:0.4rem; padding-top:1.2rem;">
+                            <span class="info-label">Administrative Notes</span>
+                            <span style="font-size:0.9rem; color:var(--text-muted); line-height:1.5; white-space:pre-wrap;">{{ asset.notes }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Business Impact Analysis Card -->
+            <div>
+                <div class="impact-card {{ asset.criticality }}">
+                    <div class="card-title" style="border-bottom:none; margin-bottom:0;">
+                        <i data-lucide="shield-alert" style="width:20px; height:20px;"></i>
+                        Business Impact Analysis
+                    </div>
+                    
+                    <div style="background:rgba(255,255,255,0.01); border:1px solid var(--glass-border); padding:1.5rem; border-radius:16px; display:flex; flex-direction:column; align-items:center; text-align:center; gap:8px;">
+                        <span style="font-size:0.75rem; text-transform:uppercase; color:var(--text-muted); font-weight:700; letter-spacing:1px;">Business Criticality</span>
+                        <span class="badge-crit {% if asset.criticality == 'Critical' %}critical{% elif asset.criticality == 'High' %}high{% elif asset.criticality == 'Medium' %}medium{% else %}low{% endif %}" style="font-size:1rem; padding:0.4rem 1.25rem;">
+                            {{ asset.get_criticality_display }}
+                        </span>
+                        
+                        <div class="risk-badge">
+                            {% if asset.criticality == 'Critical' or asset.criticality == 'High' %}
+                                High Risk Level 🚨
+                            {% elif asset.criticality == 'Medium' %}
+                                Medium Risk Level ⚠️
+                            {% else %}
+                                Low Risk Level 🟢
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:700; color:var(--text-main);">
+                            <span>Asset Importance Score</span>
+                            <span>{{ importance_score }} / 100</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: {{ importance_score }}%;"></div>
+                        </div>
+                    </div>
+
+                    <div style="display:flex; flex-direction:column; gap:0.5rem; border-top:1px solid var(--glass-border); padding-top:1.2rem;">
+                        <span style="font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.5px;">Potential Impact of Compromise</span>
+                        <p style="font-size:0.88rem; color:var(--text-main); line-height:1.5;">
+                            {{ potential_impact }}
+                        </p>
+                    </div>
+
+                    <div style="background:rgba(0,0,0,0.15); border:1px solid var(--glass-border); padding:1.2rem; border-radius:14px; font-size:0.78rem; color:var(--text-muted); line-height:1.5; display:flex; flex-direction:column; gap:5px;">
+                        <div><strong>Added By:</strong> {{ asset.added_by.username }}</div>
+                        <div><strong>Registered:</strong> {{ asset.created_at|date:"Y-m-d H:i" }}</div>
+                        <div><strong>Last Updated:</strong> {{ asset.updated_at|date:"Y-m-d H:i" }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="delete-modal" onclick="handleOverlayClick(event)">
+        <div class="modal-box">
+            <div class="modal-title" style="color:var(--accent-red);">
+                <i data-lucide="alert-triangle" style="color:var(--accent-red);width:22px;height:22px;"></i>
+                Delete Asset
+            </div>
+            <p style="color:var(--text-muted); font-size:0.9rem; line-height:1.5; margin-bottom:1.5rem;">
+                Are you sure you want to permanently delete the asset <strong>{{ asset.asset_name }}</strong>? This action is irreversible and will remove all technical and ownership details from the system database.
+            </p>
+            <form method="POST" action="{% url 'asset_delete' asset.pk %}">
+                {% csrf_token %}
+                <div style="display:flex; gap:1rem; justify-content:flex-end;">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-danger">
+                        <i data-lucide="trash-2" style="width:15px;height:15px;"></i> Confirm Delete
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+
+        // ── Sidebar toggle ───────────────────────────────────────────
+        let sidebarExpanded = false;
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const title   = document.getElementById('sidebar-title');
+            sidebarExpanded = !sidebarExpanded;
+            if (sidebarExpanded) {
+                sidebar.classList.add('expanded');
+                title.style.visibility = 'visible';
+                title.style.opacity    = '1';
+            } else {
+                sidebar.classList.remove('expanded');
+                title.style.opacity = '0';
+                setTimeout(() => { if (!sidebarExpanded) title.style.visibility = 'hidden'; }, 200);
+            }
+        }
+
+        // ── Delete confirmation modal ────────────────────────────────
+        function openDeleteModal() {
+            document.getElementById('delete-modal').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+        function closeModal() {
+            document.getElementById('delete-modal').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+        function handleOverlayClick(e) {
+            if (e.target === document.getElementById('delete-modal')) closeModal();
+        }
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>

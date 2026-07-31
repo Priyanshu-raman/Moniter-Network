@@ -487,6 +487,70 @@
             justify-content: center;
             flex-direction: row !important;
         }
+
+        /* ── Modern Toast Container ── */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            z-index: 9999;
+        }
+
+        .toast-notification {
+            min-width: 320px;
+            max-width: 400px;
+            padding: 1.25rem;
+            background: rgba(17, 25, 35, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-left: 4px solid var(--accent-green);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 12px;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            position: relative;
+        }
+
+        .toast-notification.error {
+            border-left-color: var(--accent-red);
+        }
+
+        .toast-notification.info {
+            border-left-color: var(--accent-blue);
+        }
+
+        .toast-notification.warning {
+            border-left-color: var(--accent-orange);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100px) translateY(0);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0) translateY(0);
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: scale(1);
+            }
+            to {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+        }
     </style>
 </head>
 
@@ -713,7 +777,7 @@
                     <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Webhook URL (Discord/Slack/Teams)</label>
                     <div style="display:flex; gap:0.5rem;">
                         <input type="url" id="alertWebhook" placeholder="https://..." style="flex:1; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px;">
-                        <button type="button" onclick="testWebhook()" style="background:rgba(51,153,51,0.2); border:1px solid var(--accent-green); color:var(--accent-green); padding:0 1rem; border-radius:12px; cursor:pointer;">Test</button>
+                        <button type="button" onclick="testWebhook(this)" style="background:rgba(51,153,51,0.2); border:1px solid var(--accent-green); color:var(--accent-green); padding:0 1rem; border-radius:12px; cursor:pointer;">Test</button>
                     </div>
                 </div>
 
@@ -760,6 +824,32 @@
         </div>
     </div>
 
+    <!-- Fallback Manual Network Modal -->
+    <div id="fallbackModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:2000; align-items:center; justify-content:center; backdrop-filter:blur(5px);">
+        <div style="background:var(--glass-bg); border:1px solid var(--glass-border); border-radius:20px; padding:2rem; width:420px; max-width:90%; box-shadow:var(--glass-shadow); position:relative;">
+            <button onclick="closeFallbackModal()" style="position:absolute; top:1rem; right:1rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer;">
+                <i data-lucide="x" style="width:20px;height:20px;"></i>
+            </button>
+            <h2 style="margin-top:0; color:var(--text-main); font-size:1.4rem; display:flex; align-items:center; gap:0.5rem;">
+                <i data-lucide="alert-circle" style="color:var(--accent-orange);"></i> Network Detection Failed
+            </h2>
+            <p style="color:var(--text-muted); font-size:0.9rem; margin-top:1rem; line-height:1.5;">
+                We could not automatically detect your active network adapter and subnet settings. Please enter your target network manually to start the scan.
+            </p>
+            
+            <form id="fallbackForm" style="display:flex; flex-direction:column; gap:1.2rem; margin-top:1.5rem;" onsubmit="submitFallbackScan(event)">
+                <div>
+                    <label style="color:var(--text-muted); font-size:0.85rem; display:block; margin-bottom:0.4rem;">Target Network Subnet</label>
+                    <input type="text" id="fallbackNetworkInput" placeholder="e.g. 192.168.1.0/24" required style="width:100%; background:rgba(0,0,0,0.2); border:1px solid var(--glass-border); color:var(--text-main); padding:0.7rem; border-radius:12px; font-size:0.95rem;">
+                </div>
+                
+                <button type="submit" style="background:var(--accent-green); color:#fff; border:none; padding:0.8rem; border-radius:12px; font-weight:700; cursor:pointer; margin-top:0.5rem; display:flex; justify-content:center; gap:0.5rem; align-items:center;">
+                    <i data-lucide="play" style="width:16px;height:16px;"></i> Start Manual Scan
+                </button>
+            </form>
+        </div>
+    </div>
+
     <script>
         function toggleAlertModal() {
             const modal = document.getElementById('alertModal');
@@ -776,10 +866,42 @@
             document.getElementById('webhookField').style.display = (type === 'Webhook') ? 'block' : 'none';
         }
 
-        async function testWebhook() {
+        async function testWebhook(btn) {
             const url = document.getElementById('alertWebhook').value;
             if(!url) return alert('Enter a webhook URL first.');
-            alert('Webhook test successful!');
+            
+            const originalText = btn.innerText;
+            btn.innerText = 'Testing...';
+            btn.disabled = true;
+            
+            const payload = {
+                alert_type: 'Webhook',
+                severity: 'Info',
+                subject: 'Test Notification',
+                message: 'This is a test notification from your Network Monitor Security System checking your webhook connection status.',
+                sender: '{{ username|default:"Administrator" }}',
+                webhook_url: url,
+                is_test: true
+            };
+            
+            try {
+                const res = await fetch('http://127.0.0.1:5000/api/alerts', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if(data.success) {
+                    alert('Webhook test successful! Check your Slack/Teams/Discord channel.');
+                } else {
+                    alert('Webhook test failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Request failed: ' + err.message);
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
         }
 
         async function submitAlert(e) {
@@ -905,12 +1027,95 @@
             }
         }
 
+        // ── Toast & Fallback Modal Helpers ────────────────────────────────────
+        function showNotification(title, message, type = 'success', duration = 5000) {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = `toast-notification ${type}`;
+            
+            let icon = 'info';
+            if (type === 'success') icon = 'check-circle-2';
+            else if (type === 'error') icon = 'alert-circle';
+            else if (type === 'warning') icon = 'alert-triangle';
+
+            toast.innerHTML = `
+                <div style="flex-shrink:0;"><i data-lucide="${icon}" style="width:20px; height:20px; color:${type === 'success' ? 'var(--accent-green)' : (type === 'error' ? 'var(--accent-red)' : (type === 'warning' ? 'var(--accent-orange)' : 'var(--accent-blue)'))}"></i></div>
+                <div style="flex:1;">
+                    <div style="font-weight:700; font-size:0.9rem; margin-bottom:2px;">${title}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); line-height:1.4;">${message}</div>
+                </div>
+            `;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            if (duration) {
+                setTimeout(() => {
+                    toast.style.animation = 'fadeOut 0.3s ease forwards';
+                    setTimeout(() => toast.remove(), 300);
+                }, duration);
+            }
+            return toast;
+        }
+
+        function openFallbackModal() {
+            const modal = document.getElementById('fallbackModal');
+            if (modal) {
+                modal.style.display = 'flex';
+                lucide.createIcons();
+            }
+        }
+
+        function closeFallbackModal() {
+            const modal = document.getElementById('fallbackModal');
+            if (modal) modal.style.display = 'none';
+        }
+
+        function submitFallbackScan(e) {
+            e.preventDefault();
+            const target = document.getElementById('fallbackNetworkInput').value.trim();
+            if (!target) return;
+            closeFallbackModal();
+            document.getElementById('networkInput').value = target;
+            showNotification("Scan Started", `Scanning manual target: ${target}`, "info");
+            startScan(target);
+        }
+
+        async function runAutoDiscovery() {
+            try {
+                // Fetch active network details from the Django proxy auto-discovery API
+                const response = await fetch('http://127.0.0.1:8080/api/network-info/');
+                if (!response.ok) throw new Error("HTTP error " + response.status);
+                const data = await response.json();
+                if (data.success && data.cidr_subnet) {
+                    showNotification("Auto Network Discovery Started", `Scanning detected subnet: ${data.cidr_subnet}`, "info");
+                    // We do NOT auto-fill the search bar input field as requested, keeping it clean,
+                    // but we seamlessly run the background scan on the detected subnet!
+                    startScan(data.cidr_subnet);
+                } else {
+                    throw new Error(data.error || "Subnet detection returned unsuccessful");
+                }
+            } catch (e) {
+                console.error("Auto discovery failed:", e);
+                showNotification("Auto-Discovery Failed", "Opening fallback manual configuration.", "warning");
+                openFallbackModal();
+            }
+        }
+
         // Auto-scan if a network was passed from the landing page
         const urlParams = new URLSearchParams(window.location.search);
         const initialNetwork = urlParams.get('network');
         if (initialNetwork) {
             document.getElementById('networkInput').value = initialNetwork;
             startScan(initialNetwork);
+        } else {
+            // Auto run active subnet discovery and background scan on load!
+            runAutoDiscovery();
         }
 
         async function startScan(targetNetwork) {
@@ -945,9 +1150,11 @@
                 document.getElementById('current-sort').innerText = 'Name (A-Z)';
 
                 updateDashboard();
+                showNotification("Scan Complete", `Discovered ${masterData.length} active devices.`, "success");
             } catch (error) {
                 console.error("Scan error:", error);
                 container.innerHTML = `<div class="device-card flex-center" style="color: var(--accent-red);">${error}</div>`;
+                showNotification("Scan Failed", error.message || error, "error");
             } finally {
                 document.getElementById('refresh-icon').classList.remove('animate-spin');
             }
@@ -1065,10 +1272,22 @@
                 l1: data.filter(d => d.alert?.includes('LEVEL 1')).length,
                 l2: data.filter(d => d.alert?.includes('LEVEL 2')).length,
                 l3: data.filter(d => d.alert?.includes('LEVEL 3')).length,
-                pc: data.filter(d => d.role?.includes('PC') || d.role?.includes('Workstation') || d.role?.includes('Client')).length,
-                mobile: data.filter(d => d.role?.includes('Mobile') || d.role?.includes('Phone')).length,
-                router: data.filter(d => d.role?.includes('Router') || d.role?.includes('Gateway')).length,
-                server: data.filter(d => d.role?.includes('Server') || d.role?.includes('DB') || d.role?.includes('Database')).length,
+                pc: data.filter(d => {
+                    const r = (d.role || '').toLowerCase();
+                    return r.includes('pc') || r.includes('workstation') || r.includes('client') || r.includes('host') || r.includes('machine') || r.includes('vnc') || r.includes('desktop');
+                }).length,
+                mobile: data.filter(d => {
+                    const r = (d.role || '').toLowerCase();
+                    return r.includes('mobile') || r.includes('phone') || r.includes('tablet');
+                }).length,
+                router: data.filter(d => {
+                    const r = (d.role || '').toLowerCase();
+                    return r.includes('router') || r.includes('gateway') || r.includes('switch') || r.includes('proxy') || r.includes('telnet');
+                }).length,
+                server: data.filter(d => {
+                    const r = (d.role || '').toLowerCase();
+                    return r.includes('server') || r.includes('db') || r.includes('database') || r.includes('infrastructure') || r.includes('service');
+                }).length,
             };
 
             for (const [key, value] of Object.entries(stats)) {

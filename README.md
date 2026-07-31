@@ -2,6 +2,7 @@
 
 A professional **Cybersecurity Network Monitoring Dashboard** built with a Django + Flask hybrid architecture. Features a premium dark neon "liquid glass" UI for real-time network visibility, device intelligence scanning, multi-channel alerts, and secure user registration.
 
+
 Developed by **Srida IT Consulting & Service (OPC) Pvt Ltd**
 
 ---

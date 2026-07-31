@@ -121,7 +121,7 @@
             align-items: center;
         }
 
-        .input-wrapper .lucide {
+        .input-wrapper .input-icon {
             position: absolute;
             left: 1.2rem;
             color: var(--text-muted);
@@ -146,6 +146,68 @@
             border-color: var(--accent-green);
             background: rgba(51, 153, 51, 0.05);
             box-shadow: 0 0 15px rgba(51, 153, 51, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+
+        .cyber-checkbox {
+            appearance: none;
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--glass-border);
+            width: 18px;
+            height: 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .cyber-checkbox:checked {
+            background: rgba(51, 153, 51, 0.2);
+            border-color: var(--accent-green);
+        }
+
+        .cyber-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 8px;
+            border: solid var(--accent-green);
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+            top: 2px;
+            left: 5px;
+        }
+
+        .checkbox-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 1.2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        .password-toggle:hover {
+            color: var(--accent-green);
         }
 
         .auth-btn {
@@ -243,11 +305,21 @@
                 <div class="form-group">
                     <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                     <div class="input-wrapper">
-                        <i data-lucide="{% if 'password' in field.name %}lock{% else %}user{% endif %}"></i>
+                        <i class="input-icon" data-lucide="{% if 'password' in field.name %}lock{% else %}user{% endif %}"></i>
                         {{ field }}
+                        {% if 'password' in field.name %}
+                        <div class="password-toggle" onclick="togglePassword(this)">
+                            <i data-lucide="eye"></i>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
+
+                <div class="checkbox-group">
+                    <input type="checkbox" id="rememberMe" name="remember_me" class="cyber-checkbox">
+                    <label for="rememberMe" class="checkbox-label">Remember Me</label>
+                </div>
 
                 <button type="submit" class="auth-btn">
                     Sign In <i data-lucide="arrow-right" style="width: 20px; height: 20px;"></i>
@@ -257,9 +329,25 @@
                 // Add required classes and placeholders to Django generated inputs
                 document.querySelectorAll('.input-wrapper input').forEach(input => {
                     input.classList.add('auth-input');
-                    if (input.type === 'password') input.placeholder = '••••••••';
+                    if (input.type === 'password') {
+                        input.placeholder = '••••••••';
+                        input.style.paddingRight = '3.5rem';
+                    }
                     else input.placeholder = 'Enter ' + input.name;
                 });
+
+                function togglePassword(btn) {
+                    const input = btn.previousElementSibling;
+                    const icon = btn.querySelector('i');
+                    if (input.type === 'password') {
+                        input.type = 'text';
+                        icon.setAttribute('data-lucide', 'eye-off');
+                    } else {
+                        input.type = 'password';
+                        icon.setAttribute('data-lucide', 'eye');
+                    }
+                    lucide.createIcons();
+                }
             </script>
 
             <div class="auth-footer">
